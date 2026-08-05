@@ -54,7 +54,13 @@ extern int yydebug;
     MINUS = 260,
     MUL = 261,
     DIV = 262,
-    END = 263
+    ID = 263,
+    T_BEGIN = 264,
+    T_END = 265,
+    READ = 266,
+    WRITE = 267,
+    ASSIGN = 268,
+    SEMICOLON = 269
   };
 #endif
 
@@ -62,11 +68,13 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 13 "exprtree.y"
+#line 15 "exprtree.y"
 
     tnode* node;
+    char* str;
+    int num;
 
-#line 70 "exprtree.tab.h"
+#line 78 "exprtree.tab.h"
 
 };
 typedef union YYSTYPE YYSTYPE;

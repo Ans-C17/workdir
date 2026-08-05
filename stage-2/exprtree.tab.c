@@ -76,9 +76,11 @@
 int yylex();
 void yyerror(const char* s);
 
+tnode* root;
+
 FILE* targetFile;
 
-#line 82 "exprtree.tab.c"
+#line 84 "exprtree.tab.c"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -131,7 +133,13 @@ extern int yydebug;
     MINUS = 260,
     MUL = 261,
     DIV = 262,
-    END = 263
+    ID = 263,
+    T_BEGIN = 264,
+    T_END = 265,
+    READ = 266,
+    WRITE = 267,
+    ASSIGN = 268,
+    SEMICOLON = 269
   };
 #endif
 
@@ -139,11 +147,13 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 13 "exprtree.y"
+#line 15 "exprtree.y"
 
     tnode* node;
+    char* str;
+    int num;
 
-#line 147 "exprtree.tab.c"
+#line 157 "exprtree.tab.c"
 
 };
 typedef union YYSTYPE YYSTYPE;
@@ -460,21 +470,21 @@ union yyalloc
 #endif /* !YYCOPY_NEEDED */
 
 /* YYFINAL -- State number of the termination state.  */
-#define YYFINAL  6
+#define YYFINAL  12
 /* YYLAST -- Last index in YYTABLE.  */
-#define YYLAST   24
+#define YYLAST   43
 
 /* YYNTOKENS -- Number of terminals.  */
-#define YYNTOKENS  11
+#define YYNTOKENS  17
 /* YYNNTS -- Number of nonterminals.  */
-#define YYNNTS  3
+#define YYNNTS  8
 /* YYNRULES -- Number of rules.  */
-#define YYNRULES  8
+#define YYNRULES  18
 /* YYNSTATES -- Number of states.  */
-#define YYNSTATES  17
+#define YYNSTATES  39
 
 #define YYUNDEFTOK  2
-#define YYMAXUTOK   263
+#define YYMAXUTOK   269
 
 
 /* YYTRANSLATE(TOKEN-NUM) -- Symbol number corresponding to TOKEN-NUM
@@ -490,7 +500,7 @@ static const yytype_int8 yytranslate[] =
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
-       9,    10,     2,     2,     2,     2,     2,     2,     2,     2,
+      15,    16,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
@@ -512,14 +522,15 @@ static const yytype_int8 yytranslate[] =
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     1,     2,     3,     4,
-       5,     6,     7,     8
+       5,     6,     7,     8,     9,    10,    11,    12,    13,    14
 };
 
 #if YYDEBUG
   /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_int8 yyrline[] =
 {
-       0,    27,    27,    33,    36,    39,    42,    45,    48
+       0,    34,    34,    37,    41,    44,    48,    51,    54,    58,
+      62,    66,    70,    73,    76,    79,    82,    85,    88
 };
 #endif
 
@@ -529,7 +540,9 @@ static const yytype_int8 yyrline[] =
 static const char *const yytname[] =
 {
   "$end", "error", "$undefined", "NUM", "PLUS", "MINUS", "MUL", "DIV",
-  "END", "'('", "')'", "$accept", "program", "E", YY_NULLPTR
+  "ID", "T_BEGIN", "T_END", "READ", "WRITE", "ASSIGN", "SEMICOLON", "'('",
+  "')'", "$accept", "Program", "Slist", "Stmt", "InputStmt", "OutputStmt",
+  "AsgStmt", "E", YY_NULLPTR
 };
 #endif
 
@@ -538,12 +551,12 @@ static const char *const yytname[] =
    (internal) symbol number NUM (which must be that of a token).  */
 static const yytype_int16 yytoknum[] =
 {
-       0,   256,   257,   258,   259,   260,   261,   262,   263,    40,
-      41
+       0,   256,   257,   258,   259,   260,   261,   262,   263,   264,
+     265,   266,   267,   268,   269,    40,    41
 };
 # endif
 
-#define YYPACT_NINF (-6)
+#define YYPACT_NINF (-16)
 
 #define yypact_value_is_default(Yyn) \
   ((Yyn) == YYPACT_NINF)
@@ -557,8 +570,10 @@ static const yytype_int16 yytoknum[] =
      STATE-NUM.  */
 static const yytype_int8 yypact[] =
 {
-      10,    -6,    10,     3,    16,     5,    -6,    10,    10,    10,
-      10,    -6,    -6,    -5,    -5,    -6,    -6
+      -6,    24,     4,     7,   -16,     6,     8,    30,   -16,   -16,
+     -16,   -16,   -16,    16,    14,    16,   -16,   -16,   -16,   -16,
+      16,    23,     9,     2,    10,    16,    16,    16,    16,   -16,
+      19,    25,   -16,    -5,    -5,   -16,   -16,   -16,   -16
 };
 
   /* YYDEFACT[STATE-NUM] -- Default reduction number in state STATE-NUM.
@@ -566,20 +581,22 @@ static const yytype_int8 yypact[] =
      means the default is an error.  */
 static const yytype_int8 yydefact[] =
 {
-       0,     8,     0,     0,     0,     0,     1,     0,     0,     0,
-       0,     2,     7,     3,     4,     5,     6
+       0,     0,     0,     0,     3,     0,     0,     0,     5,     6,
+       7,     8,     1,     0,     0,     0,     2,     4,    17,    18,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,    11,
+       0,     0,    16,    12,    13,    14,    15,     9,    10
 };
 
   /* YYPGOTO[NTERM-NUM].  */
 static const yytype_int8 yypgoto[] =
 {
-      -6,    -6,    -2
+     -16,   -16,   -16,    36,   -16,   -16,   -16,   -15
 };
 
   /* YYDEFGOTO[NTERM-NUM].  */
 static const yytype_int8 yydefgoto[] =
 {
-      -1,     3,     4
+      -1,     2,     7,     8,     9,    10,    11,    21
 };
 
   /* YYTABLE[YYPACT[STATE-NUM]] -- What to do in state STATE-NUM.  If
@@ -587,36 +604,44 @@ static const yytype_int8 yydefgoto[] =
      number is the opposite.  If YYTABLE_NINF, syntax error.  */
 static const yytype_int8 yytable[] =
 {
-       5,     9,    10,     6,     0,    13,    14,    15,    16,     7,
-       8,     9,    10,     1,     0,    12,     0,     0,     0,     2,
-       7,     8,     9,    10,    11
+      23,    27,    28,     1,    12,    24,    25,    26,    27,    28,
+      33,    34,    35,    36,    25,    26,    27,    28,    31,    18,
+      13,    14,    22,    15,    19,    30,    32,    25,    26,    27,
+      28,    20,     3,    37,     4,     5,     6,    29,     3,    38,
+      16,     5,     6,    17
 };
 
 static const yytype_int8 yycheck[] =
 {
-       2,     6,     7,     0,    -1,     7,     8,     9,    10,     4,
-       5,     6,     7,     3,    -1,    10,    -1,    -1,    -1,     9,
-       4,     5,     6,     7,     8
+      15,     6,     7,     9,     0,    20,     4,     5,     6,     7,
+      25,    26,    27,    28,     4,     5,     6,     7,    16,     3,
+      13,    15,     8,    15,     8,    16,    16,     4,     5,     6,
+       7,    15,     8,    14,    10,    11,    12,    14,     8,    14,
+      10,    11,    12,     7
 };
 
   /* YYSTOS[STATE-NUM] -- The (internal number of the) accessing
      symbol of state STATE-NUM.  */
 static const yytype_int8 yystos[] =
 {
-       0,     3,     9,    12,    13,    13,     0,     4,     5,     6,
-       7,     8,    10,    13,    13,    13,    13
+       0,     9,    18,     8,    10,    11,    12,    19,    20,    21,
+      22,    23,     0,    13,    15,    15,    10,    20,     3,     8,
+      15,    24,     8,    24,    24,     4,     5,     6,     7,    14,
+      16,    16,    16,    24,    24,    24,    24,    14,    14
 };
 
   /* YYR1[YYN] -- Symbol number of symbol that rule YYN derives.  */
 static const yytype_int8 yyr1[] =
 {
-       0,    11,    12,    13,    13,    13,    13,    13,    13
+       0,    17,    18,    18,    19,    19,    20,    20,    20,    21,
+      22,    23,    24,    24,    24,    24,    24,    24,    24
 };
 
   /* YYR2[YYN] -- Number of symbols on the right hand side of rule YYN.  */
 static const yytype_int8 yyr2[] =
 {
-       0,     2,     2,     3,     3,     3,     3,     3,     1
+       0,     2,     3,     2,     2,     1,     1,     1,     1,     5,
+       5,     4,     3,     3,     3,     3,     3,     1,     1
 };
 
 
@@ -1312,65 +1337,143 @@ yyreduce:
   switch (yyn)
     {
   case 2:
-#line 27 "exprtree.y"
-                {
-    int resultReg = codeGen((yyvsp[-1].node));
-    writeResult(resultReg);
-    freeReg();
-}
-#line 1322 "exprtree.tab.c"
+#line 34 "exprtree.y"
+                              {
+        root = (yyvsp[-1].node);
+    }
+#line 1345 "exprtree.tab.c"
     break;
 
   case 3:
-#line 33 "exprtree.y"
-             {
-        (yyval.node) = makeOperatorNode('+', (yyvsp[-2].node), (yyvsp[0].node));
+#line 37 "exprtree.y"
+                    {
+        root = NULL; // no syntax tree as T_BEGIN & T_END are non-terminals
     }
-#line 1330 "exprtree.tab.c"
+#line 1353 "exprtree.tab.c"
     break;
 
   case 4:
-#line 36 "exprtree.y"
-                {
-        (yyval.node) = makeOperatorNode('-', (yyvsp[-2].node), (yyvsp[0].node));
+#line 41 "exprtree.y"
+                   {
+        (yyval.node) = makeConnectorNode((yyvsp[-1].node), (yyvsp[0].node));
     }
-#line 1338 "exprtree.tab.c"
+#line 1361 "exprtree.tab.c"
     break;
 
   case 5:
-#line 39 "exprtree.y"
-              {
-        (yyval.node) = makeOperatorNode('*', (yyvsp[-2].node), (yyvsp[0].node));
+#line 44 "exprtree.y"
+           {
+        (yyval.node) = (yyvsp[0].node);
     }
-#line 1346 "exprtree.tab.c"
+#line 1369 "exprtree.tab.c"
     break;
 
   case 6:
-#line 42 "exprtree.y"
-              {
-        (yyval.node) = makeOperatorNode('/', (yyvsp[-2].node), (yyvsp[0].node));
+#line 48 "exprtree.y"
+                 {
+        (yyval.node) = (yyvsp[0].node);
     }
-#line 1354 "exprtree.tab.c"
+#line 1377 "exprtree.tab.c"
     break;
 
   case 7:
-#line 45 "exprtree.y"
-                {
-        (yyval.node) = (yyvsp[-1].node);
+#line 51 "exprtree.y"
+                 {
+        (yyval.node) = (yyvsp[0].node);
     }
-#line 1362 "exprtree.tab.c"
+#line 1385 "exprtree.tab.c"
     break;
 
   case 8:
-#line 48 "exprtree.y"
-          {
+#line 54 "exprtree.y"
+              {
         (yyval.node) = (yyvsp[0].node);
     }
-#line 1370 "exprtree.tab.c"
+#line 1393 "exprtree.tab.c"
+    break;
+
+  case 9:
+#line 58 "exprtree.y"
+                                      { // u read into a var, like read(b);
+        (yyval.node) = makeReadNode(makeIdNode((yyvsp[-2].str)));
+    }
+#line 1401 "exprtree.tab.c"
+    break;
+
+  case 10:
+#line 62 "exprtree.y"
+                                       { // u can write an expression like write(5+8);
+        (yyval.node) = makeWriteNode((yyvsp[-2].node));
+    }
+#line 1409 "exprtree.tab.c"
+    break;
+
+  case 11:
+#line 66 "exprtree.y"
+                                {
+        (yyval.node) = makeAssignNode(makeIdNode((yyvsp[-3].str)), (yyvsp[-1].node));
+    }
+#line 1417 "exprtree.tab.c"
+    break;
+
+  case 12:
+#line 70 "exprtree.y"
+             {
+        (yyval.node) = makeOperatorNode('+', (yyvsp[-2].node), (yyvsp[0].node));
+    }
+#line 1425 "exprtree.tab.c"
+    break;
+
+  case 13:
+#line 73 "exprtree.y"
+                {
+        (yyval.node) = makeOperatorNode('-', (yyvsp[-2].node), (yyvsp[0].node));
+    }
+#line 1433 "exprtree.tab.c"
+    break;
+
+  case 14:
+#line 76 "exprtree.y"
+              {
+        (yyval.node) = makeOperatorNode('*', (yyvsp[-2].node), (yyvsp[0].node));
+    }
+#line 1441 "exprtree.tab.c"
+    break;
+
+  case 15:
+#line 79 "exprtree.y"
+              {
+        (yyval.node) = makeOperatorNode('/', (yyvsp[-2].node), (yyvsp[0].node));
+    }
+#line 1449 "exprtree.tab.c"
+    break;
+
+  case 16:
+#line 82 "exprtree.y"
+                {
+        (yyval.node) = (yyvsp[-1].node);
+    }
+#line 1457 "exprtree.tab.c"
+    break;
+
+  case 17:
+#line 85 "exprtree.y"
+          {
+        (yyval.node) = makeNumNode((yyvsp[0].num));
+    }
+#line 1465 "exprtree.tab.c"
+    break;
+
+  case 18:
+#line 88 "exprtree.y"
+         {
+        (yyval.node) = makeIdNode((yyvsp[0].str));
+    }
+#line 1473 "exprtree.tab.c"
     break;
 
 
-#line 1374 "exprtree.tab.c"
+#line 1477 "exprtree.tab.c"
 
       default: break;
     }
@@ -1602,7 +1705,7 @@ yyreturn:
 #endif
   return yyresult;
 }
-#line 52 "exprtree.y"
+#line 92 "exprtree.y"
 
 
 extern FILE* yyin; // it is file pointer of lexer. defaulted to "stdin"
@@ -1634,6 +1737,16 @@ int main(int argc, char* argv[]) {
     fprintf(targetFile, "0\n");
 
     yyparse();
+    codeGen(root);
+
+    fprintf(targetFile, "MOV R2, \"Exit\"\n");
+    fprintf(targetFile, "PUSH R2\n");
+    fprintf(targetFile, "PUSH R2\n");
+    fprintf(targetFile, "PUSH R2\n");
+    fprintf(targetFile, "PUSH R2\n");
+    fprintf(targetFile, "PUSH R2\n");
+    fprintf(targetFile, "CALL 0\n");
+
 
     fclose(targetFile);
     return 0;
