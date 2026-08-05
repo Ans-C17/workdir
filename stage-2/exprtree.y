@@ -118,6 +118,7 @@ int main(int argc, char* argv[]) {
     fprintf(targetFile, "0\n");
     fprintf(targetFile, "0\n");
     fprintf(targetFile, "0\n");
+    fprintf(targetFile, "MOV SP, 4200\n");
 
     yyparse();
     codeGen(root);

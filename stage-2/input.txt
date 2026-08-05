@@ -1,3 +1,5 @@
 begin
-write(5);
+read(a);
+read(b);
+write(a + b);
 end
