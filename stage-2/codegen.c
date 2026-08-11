@@ -81,24 +81,35 @@ int codeGen(tnode* t) {
             return -1;
         }
 
+        // five elements of stack
+        // 1. function code
+        // 2. arg1
+        // 3. arg2
+        // 4. arg3
+        // 5. return value slot
+
         case NODE_WRITE: {
-            int r = codeGen(t->left);
+            int r = codeGen(t->left); 
+            // we take t->left coz write only has one child, that child is the 
+            // root of the entire subtree.. whether it be operator, node or id
+
+
+            // For Write, the ABI contract says:
+            // Arg1 = -2 (-2 = stdout)
+            // Arg2 = Buffer (here buffer means the reg that contains the value u wanna print)
+            // Arg3 = unused
+            // i.e take value from the buffer (reg) and print in stdout
 
             fprintf(targetFile, "MOV R2, \"Write\"\n");
             fprintf(targetFile, "PUSH R2\n");
-
             fprintf(targetFile, "MOV R2, -2\n");
             fprintf(targetFile, "PUSH R2\n");
-
             fprintf(targetFile, "PUSH R%d\n", r);
-
             fprintf(targetFile, "PUSH R2\n");
-
             fprintf(targetFile, "PUSH R0\n");
-
             fprintf(targetFile, "CALL 0\n");
 
-            // remove return value + 3 arguments + function code
+            // POP (return_value_reg + 3 arguments + function code)
             fprintf(targetFile, "POP R0\n");
             fprintf(targetFile, "POP R1\n");
             fprintf(targetFile, "POP R1\n");
@@ -112,21 +123,21 @@ int codeGen(tnode* t) {
 
         case NODE_READ: {
             int addr = 4096 + (t->left->varname[0] - 'a');
+            
+            // For Read, the ABI contract says:
+            // Arg1 = -1 (-1 = stdin)
+            // Arg2 = Buffer (here buffer means which reg to store the value into)
+            // Arg3 = unused
+            // i.e take value from stdin and store it in buffer
 
             fprintf(targetFile, "MOV R2, \"Read\"\n");
             fprintf(targetFile, "PUSH R2\n");
-
             fprintf(targetFile, "MOV R2, -1\n");
             fprintf(targetFile, "PUSH R2\n");
-
             fprintf(targetFile, "MOV R2, %d\n", addr);
             fprintf(targetFile, "PUSH R2\n");
-
-            fprintf(targetFile, "MOV R2, 0\n"); // idt this is required anyways its garbage
             fprintf(targetFile, "PUSH R2\n");
-
             fprintf(targetFile, "PUSH R0\n");
-
             fprintf(targetFile, "CALL 0\n");
 
             // remove return value + 3 arguments + function code

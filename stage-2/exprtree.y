@@ -30,7 +30,7 @@ FILE* targetFile;
 %left MUL DIV
 
 %%
-// the parser internally has one big automaton of all the grammar rules combined
+// the parser internally has one big automaton of ALL the grammar rules combined
 // so when it asks for next yylex() call, it gets one lookahead token
 // The current automaton state determines which tokens are valid next - 
 // and which transition/action to take out of all the branches
@@ -126,7 +126,8 @@ int main(int argc, char* argv[]) {
     fprintf(targetFile, "0\n");
     fprintf(targetFile, "0\n");
     fprintf(targetFile, "0\n");
-    fprintf(targetFile, "MOV SP, 4200\n");
+    fprintf(targetFile, "MOV SP, 4200\n"); // the first mem addr from which we gon store stuff
+    // usually we initialize it to 4095 (so push increments it to 4096)
 
     yyparse(); // yyparse() says "i need next token" -> calls yylex() reads chars from input
     // yylex() reads things char by char -> tries to match to LEX rules for every char 
