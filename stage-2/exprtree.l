@@ -5,8 +5,6 @@
 #include "exprtree.tab.h"
 
 void yyerror(const char* s);
-
-int number;
 %}
 
 %%

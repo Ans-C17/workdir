@@ -30,6 +30,14 @@ FILE* targetFile;
 %left MUL DIV
 
 %%
+// the parser internally has one big automaton of all the grammar rules combined
+// so when it asks for next yylex() call, it gets one lookahead token
+// The current automaton state determines which tokens are valid next - 
+// and which transition/action to take out of all the branches
+// it decides between shift and reduce by matching the token
+// if it is partially matched it shifts to next state, expecting another token
+// if it matches a complete grammar rule, it reduces it into the non terminal on the left
+// runs the yacc code block, and continues on with the reduced state
 
 Program : T_BEGIN Slist T_END SEMICOLON {
         root = $2;
@@ -120,7 +128,15 @@ int main(int argc, char* argv[]) {
     fprintf(targetFile, "0\n");
     fprintf(targetFile, "MOV SP, 4200\n");
 
-    yyparse();
+    yyparse(); // yyparse() says "i need next token" -> calls yylex() reads chars from input
+    // yylex() reads things char by char -> tries to match to LEX rules for every char 
+    // when it finds a complete match -> it sets yytext to that value
+    // then yylval takes the yytext, returns the token required and sends it to parser
+    // i.e E : NUM { $$ : makeNode($1) } -> $1 is the value LEX put into yylval
+    // athayith, YACC recieves NUM, to match and $1 contains the value
+    // return tells YACC WHAT it received. yylval tells YACC the VALUE attached to it.
+    // bison writes yylval as a global variable so when it calls yylex, it can access it
+
     codeGen(root);
 
     fprintf(targetFile, "MOV R2, \"Exit\"\n");
