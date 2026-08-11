@@ -31,10 +31,10 @@ FILE* targetFile;
 
 %%
 
-Program : T_BEGIN Slist T_END SEMICOLON {
+Program : T_BEGIN Slist T_END {
         root = $2;
     } 
-    | T_BEGIN T_END SEMICOLON {
+    | T_BEGIN T_END {
         root = NULL; // no syntax tree as T_BEGIN & T_END are non-terminals
     };
 
