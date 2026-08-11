@@ -2,14 +2,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "exprtree.h"
-#include "codegen.h"
+#include "evaluator.h"
 
 int yylex();
 void yyerror(const char* s);
 
 tnode* root;
-
-FILE* targetFile;
 %}
 
 %union{
@@ -31,10 +29,10 @@ FILE* targetFile;
 
 %%
 
-Program : T_BEGIN Slist T_END {
+Program : T_BEGIN Slist T_END SEMICOLON {
         root = $2;
     } 
-    | T_BEGIN T_END {
+    | T_BEGIN T_END SEMICOLON {
         root = NULL; // no syntax tree as T_BEGIN & T_END are non-terminals
     };
 
@@ -92,7 +90,7 @@ E : E PLUS E {
 %%
 
 extern FILE* yyin; // it is file pointer of lexer. defaulted to "stdin"
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
     if (argc < 2) {
         printf("Usage: %s <inputfile>\n", argv[0]);
         return 1;
@@ -104,35 +102,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    targetFile = fopen("target.xsm", "w");
-    if (!targetFile) {
-        printf("Could not open target file\n");
-        exit(1);
-    }
-
-    fprintf(targetFile, "0\n");
-    fprintf(targetFile, "2056\n");
-    fprintf(targetFile, "0\n");
-    fprintf(targetFile, "0\n");
-    fprintf(targetFile, "0\n");
-    fprintf(targetFile, "0\n");
-    fprintf(targetFile, "0\n");
-    fprintf(targetFile, "0\n");
-    fprintf(targetFile, "MOV SP, 4200\n");
-
     yyparse();
-    codeGen(root);
-
-    fprintf(targetFile, "MOV R2, \"Exit\"\n");
-    fprintf(targetFile, "PUSH R2\n");
-    fprintf(targetFile, "PUSH R2\n");
-    fprintf(targetFile, "PUSH R2\n");
-    fprintf(targetFile, "PUSH R2\n");
-    fprintf(targetFile, "PUSH R2\n");
-    fprintf(targetFile, "CALL 0\n");
-
-
-    fclose(targetFile);
+    evaluate(root);
+    fclose(yyin);
     return 0;
 }
 

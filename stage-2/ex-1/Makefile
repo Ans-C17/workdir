@@ -1,7 +1,7 @@
 all: exprtree
 
-exprtree: exprtree.tab.c lex.yy.c exprtree.c codegen.c
-	gcc exprtree.tab.c lex.yy.c exprtree.c codegen.c -o exprtree
+exprtree: exprtree.tab.c lex.yy.c exprtree.c evaluator.c
+	gcc exprtree.tab.c lex.yy.c exprtree.c evaluator.c -o exprtree
 
 exprtree.tab.c exprtree.tab.h: exprtree.y
 	bison -d exprtree.y
