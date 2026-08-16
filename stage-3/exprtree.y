@@ -1,0 +1,175 @@
+%{
+#include <stdio.h>
+#include <stdlib.h>
+#include "exprtree.h"
+#include "codegen.h"
+
+int yylex();
+void yyerror(const char* s);
+
+tnode* root;
+
+FILE* targetFile;
+%}
+
+%union{
+    tnode* node;
+    char* str;
+    int num;
+}
+
+// we do SYNTAX ANALYSIS here - checking if the syntax is right like ID ASSIGN E SEMICOLON
+// SEMANTIC ANALYSIS = is the meaning valid?
+// a = b < c; can pass the above grammar SYNTACTICALLY, but fails SEMANTICALLY
+
+%token <num> NUM // bison terminology: the SEMANTIC VALUE associated with NUM is <num>, 
+// i.e bisons way of saying this is the C value associated with the grammar symbol
+%token PLUS MINUS MUL DIV
+%token <str> ID
+%token T_BEGIN T_END READ WRITE
+%token ASSIGN SEMICOLON
+
+%type <node> Program Slist Stmt InputStmt OutputStmt AsgStmt E
+
+%left PLUS MINUS
+%left MUL DIV
+
+%%
+// the parser internally has one big automaton of ALL the grammar rules combined
+// so when it asks for next yylex() call, it gets one lookahead token
+// The current automaton state determines which tokens are valid next - 
+// and which transition/action to take out of all the branches
+// it decides between shift and reduce by matching the token
+// if it is partially matched it shifts to next state, expecting another token
+// if it matches a complete grammar rule, it reduces it into the non terminal on the left
+// runs the yacc code block, and continues on with the reduced state
+
+// matte missinte bottom up parser varacha manasilavum (stack, i/p, action)
+// u will see stack being [begin, Slist, Stmt] after reducing second read to stmt
+// so Slist Stmt, i.e stack top 2 elements have a reduction rule of Slist -> Slist Stmt
+// so stack is [begin slist] again now
+
+// so Slist is not storing the source text
+// it just stores the pointer. the root = $2 (remember, %type <node> slist?)
+// i.e Whenever I have an Slist, its semantic value is a tnode*
+Program : T_BEGIN Slist T_END SEMICOLON {
+        root = $2;
+    } 
+    | T_BEGIN T_END SEMICOLON {
+        root = NULL; // no syntax tree as T_BEGIN & T_END are non-terminals
+    };
+
+
+// we play pointer passing/propagation not pointer traversal
+// pointer traversal happens when we walk the AST in codeGen()
+// we pass the same pointer upward .. Slist : Slist Stmtile $$ would be $2 of Program : Tbegin Slist Tend
+Slist : Slist Stmt {
+        $$ = makeConnectorNode($1, $2);
+    }
+    | Stmt {
+        $$ = $1;
+    };
+
+Stmt : InputStmt {
+        $$ = $1;
+    }
+    | OutputStmt {
+        $$ = $1;
+    }
+    | AsgStmt {
+        $$ = $1;
+    };
+
+InputStmt : READ '(' ID ')' SEMICOLON { // u read into a var, like read(b);
+        $$ = makeReadNode(makeIdNode($3));
+    };
+
+OutputStmt : WRITE '(' E ')' SEMICOLON { // u can write an expression like write(5+8);
+        $$ = makeWriteNode($3);
+    };
+
+AsgStmt : ID ASSIGN E SEMICOLON {
+        $$ = makeAssignNode(makeIdNode($1), $3);
+    };
+
+E : E PLUS E {
+        $$ = makeOperatorNode("+", $1, $3);
+    }
+    | E MINUS E {
+        $$ = makeOperatorNode("-", $1, $3);
+    }
+    | E MUL E {
+        $$ = makeOperatorNode("*", $1, $3);
+    }
+    | E DIV E {
+        $$ = makeOperatorNode("/", $1, $3);
+    }
+    | '(' E ')' {
+        $$ = $2;
+    }
+    | NUM {
+        $$ = makeNumNode($1);
+    }
+    | ID {
+        $$ = makeIdNode($1);
+    };
+
+%%
+
+extern FILE* yyin; // it is file pointer of lexer. defaulted to "stdin"
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        printf("Usage: %s <inputfile>\n", argv[0]);
+        return 1;
+    }
+
+    yyin = fopen(argv[1], "r");
+    if (yyin == NULL) {
+        printf("Cannot open input file\n");
+        return 1;
+    }
+
+    targetFile = fopen("target.xsm", "w");
+    if (!targetFile) {
+        printf("Could not open target file\n");
+        exit(1);
+    }
+
+    fprintf(targetFile, "0\n");
+    fprintf(targetFile, "2056\n");
+    fprintf(targetFile, "0\n");
+    fprintf(targetFile, "0\n");
+    fprintf(targetFile, "0\n");
+    fprintf(targetFile, "0\n");
+    fprintf(targetFile, "0\n");
+    fprintf(targetFile, "0\n");
+    fprintf(targetFile, "MOV SP, 4200\n"); // the first mem addr from which we gon store stuff
+    // usually we initialize it to 4095 (so push increments it to 4096)
+
+    yyparse(); // yyparse() says "i need next token" -> calls yylex() reads chars from input
+    // yylex() reads things char by char -> tries to match to LEX rules for every char 
+    // when it finds a complete match -> it sets yytext to that value
+    // then yylval takes the yytext, returns the token required and sends it to parser
+    // i.e E : NUM { $$ : makeNode($1) } -> $1 is the value LEX put into yylval
+    // athayith, YACC recieves NUM, to match and $1 contains the value
+    // return tells YACC WHAT it received. yylval tells YACC the VALUE attached to it.
+    // bison writes yylval as a global variable so when it calls yylex, it can access it
+
+    codeGen(root);
+
+    fprintf(targetFile, "MOV R2, \"Exit\"\n");
+    fprintf(targetFile, "PUSH R2\n");
+    fprintf(targetFile, "PUSH R2\n");
+    fprintf(targetFile, "PUSH R2\n");
+    fprintf(targetFile, "PUSH R2\n");
+    fprintf(targetFile, "PUSH R2\n");
+    fprintf(targetFile, "CALL 0\n");
+
+
+    fclose(targetFile);
+    return 0;
+}
+
+void yyerror(const char* s) {
+    printf("%s\n", s);
+}
