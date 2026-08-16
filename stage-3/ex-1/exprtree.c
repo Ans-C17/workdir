@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-
 tnode* createTree(int val, int type, int nodetype, char* varname, tnode* l, tnode* m, tnode* r) {
     tnode* temp = (tnode*)malloc(sizeof(tnode));
 

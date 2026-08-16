@@ -60,12 +60,13 @@ int evaluate(tnode *t) {
             evaluate(t->left);
             evaluate(t->right);
             return 0;
-            
-        case NODE_IF:
+
+        case NODE_IF: {
             int condition = evaluate(t->left);
             if (condition) return evaluate(t->middle);
             else if (t->right != NULL) return evaluate(t->right);
             return 0;
+        }
 
         case NODE_WHILE:
             while (evaluate(t->left))

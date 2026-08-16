@@ -1,8 +1,7 @@
 %{
 #include <stdio.h>
 #include <stdlib.h>
-#include "exprtree.h"
-#include "codegen.h"
+#include "evaluator.h"
 
 int yylex();
 void yyerror(const char* s);
@@ -183,7 +182,7 @@ E : E PLUS E {
 %%
 
 extern FILE* yyin; // it is file pointer of lexer. defaulted to "stdin"
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
     if (argc < 2) {
         printf("Usage: %s <inputfile>\n", argv[0]);
         return 1;
@@ -195,44 +194,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    targetFile = fopen("target.xsm", "w");
-    if (!targetFile) {
-        printf("Could not open target file\n");
-        exit(1);
-    }
-
-    fprintf(targetFile, "0\n");
-    fprintf(targetFile, "2056\n");
-    fprintf(targetFile, "0\n");
-    fprintf(targetFile, "0\n");
-    fprintf(targetFile, "0\n");
-    fprintf(targetFile, "0\n");
-    fprintf(targetFile, "0\n");
-    fprintf(targetFile, "0\n");
-    fprintf(targetFile, "MOV SP, 4200\n"); // the first mem addr from which we gon store stuff
-    // usually we initialize it to 4095 (so push increments it to 4096)
-
-    yyparse(); // yyparse() says "i need next token" -> calls yylex() reads chars from input
-    // yylex() reads things char by char -> tries to match to LEX rules for every char 
-    // when it finds a complete match -> it sets yytext to that value
-    // then yylval takes the yytext, returns the token required and sends it to parser
-    // i.e E : NUM { $$ : makeNode($1) } -> $1 is the value LEX put into yylval
-    // athayith, YACC recieves NUM, to match and $1 contains the value
-    // return tells YACC WHAT it received. yylval tells YACC the VALUE attached to it.
-    // bison writes yylval as a global variable so when it calls yylex, it can access it
-
-    codeGen(root);
-
-    fprintf(targetFile, "MOV R2, \"Exit\"\n");
-    fprintf(targetFile, "PUSH R2\n");
-    fprintf(targetFile, "PUSH R2\n");
-    fprintf(targetFile, "PUSH R2\n");
-    fprintf(targetFile, "PUSH R2\n");
-    fprintf(targetFile, "PUSH R2\n");
-    fprintf(targetFile, "CALL 0\n");
-
-
-    fclose(targetFile);
+    yyparse();
+    evaluate(root);
+    fclose(yyin);
     return 0;
 }
 
