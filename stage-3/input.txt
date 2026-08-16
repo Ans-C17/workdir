@@ -1,7 +1,8 @@
 begin
 read(a);
-read(b);
-if (a < b) then write(b);
-else write(a);
+
+if (a > 10) then
+    write(a);
 endif;
+
 end;
