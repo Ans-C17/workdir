@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-
 tnode* createTree(int val, int type, int nodetype, char* varname, tnode* l, tnode* m, tnode* r) {
     tnode* temp = (tnode*)malloc(sizeof(tnode));
 
@@ -71,7 +70,7 @@ tnode* makeOperatorNode(char* op, tnode* l, tnode* r) {
         exit(1);
     }
 
-    if (l->type != TYPE_INT || r->type != TYPE_INT) {
+    if (l->type != TYPE_INT || r->type != TYPE_INT) { // left and right operands should both be strictly int 
         fprintf(stderr, "Type mismatch\n");
         exit(1);
     }
@@ -85,6 +84,7 @@ tnode* makeIdNode(char* name) {
 
 tnode* makeAssignNode(tnode* id, tnode* expr) {
     if (expr->type != TYPE_INT) { // u can only assign an int (a = <bool> is gay)
+        // eg: a = 5 > 3
         fprintf(stderr, "Type mismatch\n");
         exit(1);
     }
@@ -105,10 +105,20 @@ tnode* makeConnectorNode(tnode* l, tnode* r) {
 }
 
 tnode* makeIfNode(tnode* cond, tnode* thenStmt, tnode* elseStmt) {
+    if (cond->type != TYPE_BOOL) {
+        fprintf(stderr, "Type mismatch\n"); // if (a + b) ❌ --- if (a < b) ✅
+        exit(1);
+    }
+
     return createTree(0, TYPE_BOOL, NODE_IF, NULL, cond, thenStmt, elseStmt);
 }
 
 tnode* makeWhileNode(tnode* cond, tnode* body) {
+    if (cond->type != TYPE_BOOL) {
+        fprintf(stderr, "Type mismatch\n");
+        exit(1);
+    }
+
     return createTree(0, TYPE_BOOL, NODE_WHILE, NULL, cond, NULL, body);
 }
 

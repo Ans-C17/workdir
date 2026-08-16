@@ -5,6 +5,7 @@
 
 int getReg();
 void freeReg();
+int getLabel();
 
 int codeGen(tnode *root);
 

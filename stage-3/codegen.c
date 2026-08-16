@@ -4,6 +4,12 @@
 
 extern FILE* targetFile;
 int reg = -1;
+int label = 0;
+
+#define MAX_LOOP_DEPTH 100 // nested loops require stack
+int loopTop = -1; // innermost loop
+int loopBreak[MAX_LOOP_DEPTH];
+int loopContinue[MAX_LOOP_DEPTH];
 
 int getReg() {
     if (reg >= 19) {
@@ -15,8 +21,28 @@ int getReg() {
     return reg;
 }
 
+int getLabel() {
+    return label++; // post-increment
+}
+
 void freeReg() {
     if (reg >= 0) reg--;
+}
+
+void pushLoop(int breakLabel, int continueLabel) {
+    if (loopTop >= MAX_LOOP_DEPTH - 1) {
+        printf("Too many nested loops\n");
+        exit(1);
+    }
+
+    loopTop++;
+
+    loopBreak[loopTop] = breakLabel;
+    loopContinue[loopTop] = continueLabel;
+}
+
+void popLoop() {
+    if (loopTop >= 0) loopTop--;
 }
 
 int codeGen(tnode* t) {
@@ -65,6 +91,42 @@ int codeGen(tnode* t) {
 
             freeReg(); // free rightReg
             return leftReg; // assembly stores result from rightReg into leftReg
+        }
+
+        case NODE_LT:
+        case NODE_GT:
+        case NODE_LE:
+        case NODE_GE:
+        case NODE_EQ:
+        case NODE_NE: {
+            int leftReg = codeGen(t->left);
+            int rightReg = codeGen(t->right);
+
+            switch (t->nodetype) {
+                case NODE_LT:
+                    fprintf(targetFile, "LT R%d, R%d\n", leftReg, rightReg);
+                    break;
+
+                case NODE_GT:
+                    fprintf(targetFile, "GT R%d, R%d\n", leftReg, rightReg);
+                    break;
+
+                case NODE_LE:
+                    fprintf(targetFile, "LE R%d, R%d\n", leftReg, rightReg);
+                    break;
+
+                case NODE_GE:
+                    fprintf(targetFile, "GE R%d, R%d\n", leftReg, rightReg);
+                    break;
+
+                case NODE_EQ:
+                    fprintf(targetFile, "EQ R%d, R%d\n", leftReg, rightReg);
+                    break;
+
+                case NODE_NE:
+                    fprintf(targetFile, "NE R%d, R%d\n", leftReg, rightReg);
+                    break;
+            }
         }
 
         case NODE_ASSIGN: {
@@ -146,6 +208,47 @@ int codeGen(tnode* t) {
             fprintf(targetFile, "POP R1\n");
             fprintf(targetFile, "POP R1\n");
             fprintf(targetFile, "POP R1\n");
+            return -1;
+        }
+
+        case NODE_IF: {
+            int condReg = codeGen(t->left);
+            int labelElse = getLabel();
+            int labelEnd = getLabel();
+
+            fprintf(targetFile, "JZ R%d, L%d\n", condReg, labelElse);
+            freeReg();
+            
+            codeGen(t->middle); // if body
+            // if execute aaya, jump to end by skipping else
+            fprintf(targetFile, "JMP L%d\n", labelEnd);
+            
+            // same labelElse value 
+            fprintf(targetFile, "L%d:\n", labelElse);
+            if (t->right != NULL) codeGen(t->right); // else body
+
+            fprintf(targetFile, "L%d:\n", labelEnd);
+            return -1;
+        }
+
+        case NODE_WHILE: {
+            int labelStart = getLabel();
+            int labelEnd = getLabel();
+
+            pushLoop(labelEnd, labelStart); 
+            // break = leave and go to LabelEnd
+            // continue = start again so labelStart
+
+            fprintf(targetFile, "L%d:\n", labelStart);
+            int condReg = codeGen(t->left); // check true
+            fprintf(targetFile, "JZ R%d, L%d\n", condReg, labelEnd); // false aanel
+
+            freeReg();
+            codeGen(t->right); // body
+            fprintf(targetFile, "JMP L%d\n", labelStart); // loop
+
+            fprintf(targetFile, "L%d:\n", labelEnd); // next label heading
+            popLoop();
             return -1;
         }
     }
