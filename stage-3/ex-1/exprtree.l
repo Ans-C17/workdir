@@ -45,9 +45,6 @@ void yyerror(const char* s);
 "do" { return DO; }
 "endwhile" { return ENDWHILE; }
 
-"break" { return BREAK; }
-"continue" { return CONTINUE; }
-
 "=" { return ASSIGN; }
 ";" { return SEMICOLON; }
 

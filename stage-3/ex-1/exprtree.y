@@ -37,13 +37,11 @@ FILE* targetFile;
 %token READ WRITE
 %token IF THEN ELSE ENDIF
 %token WHILE DO ENDWHILE
-%token BREAK CONTINUE
 // 1. terminal -> %TOKEN (with or without semantic value, declaration required)
 // 2. non terminal -> %TYPE (not required if no semantic value)
 
 %type <node> Program Slist Stmt InputStmt OutputStmt AsgStmt E
 %type <node> IfStmt WhileStmt
-%type <node> BreakStmt ContinueStmt
 
 %left EQ NE // a + 5 < b * 2 -> (a + 5) < (b * 2) => arithmetic before comparison
 %left LT GT LE GE // conventionally equality operators lower precedence than relation operators
@@ -101,12 +99,6 @@ Stmt : InputStmt {
     | WhileStmt {
         $$ = $1;
     } 
-    | BreakStmt {
-        $$ = $1;
-    }
-    | ContinueStmt {
-        $$ = $1;
-    }
 
 InputStmt : READ '(' ID ')' SEMICOLON { // u read into a var, like read(b);
         $$ = makeReadNode(makeIdNode($3));
@@ -129,14 +121,6 @@ IfStmt : IF '(' E ')' THEN Slist ELSE Slist ENDIF SEMICOLON {
 
 WhileStmt : WHILE '(' E ')' DO Slist ENDWHILE SEMICOLON {
         $$ = makeWhileNode($3, $6);        
-    };
-
-BreakStmt : BREAK SEMICOLON {
-        $$ = makeBreakNode();
-    };
-
-ContinueStmt : CONTINUE SEMICOLON {
-        $$ = makeContinueNode();
     };
     
 E : E PLUS E {

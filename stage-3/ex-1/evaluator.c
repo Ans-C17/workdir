@@ -69,9 +69,7 @@ int evaluate(tnode *t) {
         }
 
         case NODE_WHILE:
-            while (evaluate(t->left))
-                evaluate(t->right);
-
+            while (evaluate(t->left)) evaluate(t->right);
             return 0;
     }
 

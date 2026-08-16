@@ -1,7 +1,10 @@
 begin
-read(a);
-while (a < 5) do
-    write(a);
-    a = a + 1;
+read(n);
+s = 0;
+while (n > 0) do
+    read(a);
+    s = s + a;
+    n = n - 1;
 endwhile;
+write(s);
 end;
