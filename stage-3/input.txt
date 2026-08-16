@@ -1,5 +1,11 @@
 begin
 read(a);
 read(b);
-write(a * b + 5);
+
+if (a < b) then
+    write(b);
+else
+    write(a);
+endif;
+
 end;

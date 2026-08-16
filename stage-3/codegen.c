@@ -127,6 +127,9 @@ int codeGen(tnode* t) {
                     fprintf(targetFile, "NE R%d, R%d\n", leftReg, rightReg);
                     break;
             }
+            
+            freeReg();
+            return leftReg;
         }
 
         case NODE_ASSIGN: {
