@@ -21,7 +21,9 @@ enum {
     NODE_IF,
     NODE_WHILE,
     NODE_BREAK,
-    NODE_CONTINUE
+    NODE_CONTINUE,
+    NODE_REPEAT,
+    NODE_DOWHILE
 };
 
 enum {
@@ -52,5 +54,8 @@ tnode* makeWhileNode(tnode* cond, tnode* body);
 
 tnode* makeBreakNode();
 tnode* makeContinueNode();
+
+tnode* makeRepeatNode(tnode* cond, tnode* body);
+tnode* makeDoWhileNode(tnode* cond, tnode* body);
 
 #endif
