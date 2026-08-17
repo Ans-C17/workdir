@@ -129,3 +129,11 @@ tnode* makeBreakNode() {
 tnode* makeContinueNode() {
     return createTree(0, TYPE_INT, NODE_CONTINUE, NULL, NULL, NULL, NULL);
 }
+
+tnode* makeRepeatNode(tnode* body, tnode* cond) {
+    return createTree(0, TYPE_BOOL, NODE_REPEAT, NULL, cond, NULL, body);
+}
+
+tnode* makeDoWhileNode(tnode* body, tnode* cond) {
+    return createTree(0, TYPE_BOOL, NODE_DOWHILE, NULL, cond, NULL, body);
+}

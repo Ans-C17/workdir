@@ -272,6 +272,49 @@ int codeGen(tnode* t) {
             return -1;
         }
 
+        case NODE_REPEAT: {
+            int labelStart = getLabel();
+            int labelCondition = getLabel();
+            int labelEnd = getLabel();
+
+            // condition check is at the bottom not top
+            pushLoop(labelEnd, labelCondition);
+            fprintf(targetFile, "L%d:\n", labelStart);
+            codeGen(t->right);
+
+            // condition check
+            fprintf(targetFile, "L%d:\n", labelCondition);
+            int condReg = codeGen(t->left);
+
+            // repeat till condition is FALSE
+            fprintf(targetFile, "JZ R%d, L%d\n", condReg, labelStart);
+
+            freeReg();
+            fprintf(targetFile, "L%d:\n", labelEnd);
+            popLoop();
+            return -1;
+        }
+
+        case NODE_DOWHILE: {
+            int labelStart = getLabel();
+            int labelCondition = getLabel();
+            int labelEnd = getLabel();
+
+            pushLoop(labelEnd, labelCondition);
+            fprintf(targetFile, "L%d:\n", labelStart);
+
+            codeGen(t->right);
+
+            fprintf(targetFile, "L%d:\n", labelCondition);
+            int condReg = codeGen(t->left);
+
+            fprintf(targetFile, "JNZ R%d, L%d\n", condReg, labelStart);
+            freeReg();
+
+            fprintf(targetFile, "L%d:\n", labelEnd);
+            popLoop();
+            return -1;
+        }
     }
 
     return -1;

@@ -38,6 +38,7 @@ FILE* targetFile;
 %token READ WRITE
 %token IF THEN ELSE ENDIF
 %token WHILE DO ENDWHILE
+%token REPEAT UNTIL DOWHILE
 %token BREAK CONTINUE
 // 1. terminal -> %TOKEN (with or without semantic value, declaration required)
 // 2. non terminal -> %TYPE (not required if no semantic value)
@@ -45,6 +46,7 @@ FILE* targetFile;
 %type <node> Program Slist Stmt InputStmt OutputStmt AsgStmt E
 %type <node> IfStmt WhileStmt
 %type <node> BreakStmt ContinueStmt
+%type <node> RepeatStmt DoWhileStmt
 
 %left EQ NE // a + 5 < b * 2 -> (a + 5) < (b * 2) => arithmetic before comparison
 %left LT GT LE GE // conventionally equality operators lower precedence than relation operators
@@ -108,6 +110,12 @@ Stmt : InputStmt {
     | ContinueStmt {
         $$ = $1;
     }
+    | RepeatStmt {
+        $$ = $1;
+    }
+    | DoWhileStmt {
+        $$ = $1;
+    };
 
 InputStmt : READ '(' ID ')' SEMICOLON { // u read into a var, like read(b);
         $$ = makeReadNode(makeIdNode($3));
@@ -139,6 +147,15 @@ BreakStmt : BREAK SEMICOLON {
 ContinueStmt : CONTINUE SEMICOLON {
         $$ = makeContinueNode();
     };
+
+RepeatStmt : REPEAT Slist UNTIL '(' E ')' SEMICOLON {
+        $$ = makeRepeatNode($2, $5);
+    };
+
+DoWhileStmt : DO Slist WHILE '(' E ')' SEMICOLON {
+        $$ = makeDoWhileNode($2, $5);
+    };
+
     
 E : E PLUS E {
         $$ = makeOperatorNode("+", $1, $3);

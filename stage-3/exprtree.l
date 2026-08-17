@@ -48,6 +48,10 @@ void yyerror(const char* s);
 "break" { return BREAK; }
 "continue" { return CONTINUE; }
 
+"repeat"    { return REPEAT; }
+"until"     { return UNTIL; }
+"dowhile"   { return DOWHILE; }
+
 "=" { return ASSIGN; }
 ";" { return SEMICOLON; }
 
