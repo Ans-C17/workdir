@@ -37,6 +37,7 @@ void pushLoop(int breakLabel, int continueLabel) {
 
     loopTop++;
 
+    // push to stacks
     loopBreak[loopTop] = breakLabel;
     loopContinue[loopTop] = continueLabel;
 }
@@ -254,6 +255,23 @@ int codeGen(tnode* t) {
             popLoop();
             return -1;
         }
+
+        case NODE_BREAK: {
+            if (loopTop >= 0) { // loopil aanel breakine work cheyicha mathi
+                fprintf(targetFile, "JMP L%d\n", loopBreak[loopTop]);
+            }
+
+            return -1;
+        }
+
+        case NODE_CONTINUE: {
+            if (loopTop >= 0) {
+                fprintf(targetFile, "JMP L%d\n", loopContinue[loopTop]);
+            }
+
+            return -1;
+        }
+
     }
 
     return -1;
