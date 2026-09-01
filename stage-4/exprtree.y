@@ -41,12 +41,14 @@ FILE* targetFile;
 %token READ WRITE
 %token IF THEN ELSE ENDIF
 %token WHILE DO ENDWHILE
-%token REPEAT UNTIL DOWHILE
+%token REPEAT UNTIL
 %token BREAK CONTINUE
+%token <str> STRING
+
 // 1. terminal -> %TOKEN (with or without semantic value, declaration required)
 // 2. non terminal -> %TYPE (not required if no semantic value)
 
-%type <node> Program Slist Stmt InputStmt OutputStmt AsgStmt E
+%type <node> Program Slist Stmt InputStmt OutputStmt AsgStmt E Variable
 %type <node> IfStmt WhileStmt
 %type <node> BreakStmt ContinueStmt
 %type <node> RepeatStmt DoWhileStmt
@@ -78,8 +80,12 @@ DeclList : DeclList Decl | Decl;
 Decl : Type VarList SEMICOLON {
         VarList* temp = $2;
 
+        // if i have like 
+        // int a, b;
+        // int c, d; (in two lines)
+        // the varlist gon be like two diff linked lists, and each time reduction is done, we traverse thru
         while (temp) {
-            Install(temp->name, $1, 1);
+            Install(temp->name, $1, temp->size); // this function adds shi into the symbol table
             temp = temp->next;
         }
     };
@@ -91,9 +97,36 @@ Type : INT {
         $$ = TYPE_STR;
     };
 
-VarList : VarList ',' ID {
+/*
+This supports all of these:
+    int a;
+    int a[10];
+    int a[10], b[10];
+    int a, b[5];
+    int a[10], b, c[20];
+*/
+VarList : VarList ',' ID '[' NUM ']' { 
         VarList* newVar = malloc(sizeof(VarList));
         newVar->name = $3;
+        newVar->size = $5; // array ayond size koduk
+        newVar->next = NULL;
+
+        VarList* temp = $1;
+        while (temp->next != NULL) temp = temp->next;
+        temp->next = newVar;
+        $$ = $1;
+    }
+    | ID '[' NUM ']' {
+        VarList* newVar = malloc(sizeof(VarList));
+        newVar->name = $1;
+        newVar->size = $3;
+        newVar->next = NULL;
+        $$ = newVar;
+    }
+    | VarList ',' ID {
+        VarList* newVar = malloc(sizeof(VarList));
+        newVar->name = $3;
+        newVar->size = 1;
         newVar->next = NULL;
 
         VarList* temp = $1;
@@ -107,9 +140,20 @@ VarList : VarList ',' ID {
     | ID {
         VarList* newVar = malloc(sizeof(VarList));
         newVar->name = $1;
+        newVar->size = 1;
         newVar->next = NULL;
 
         $$ = newVar;
+    };
+
+// n → makeIdNode("n")
+// arr[i] → makeArrayNode("arr", AST of i)
+Variable : ID {
+        $$ = makeIdNode($1);
+    }
+    | ID '[' E ']' { // this is strictly for accessing array elements only, not declaration
+        // also E aayond we can do like arr[i + 5 * 8] lol
+        $$ = makeArrayNode($1, $3);
     };
 
 // matte missinte bottom up parser varacha manasilavum (stack, i/p, action)
@@ -166,16 +210,16 @@ Stmt : InputStmt {
         $$ = $1;
     };
 
-InputStmt : READ '(' ID ')' SEMICOLON { // u read into a var, like read(b);
-        $$ = makeReadNode(makeIdNode($3));
+InputStmt : READ '(' Variable ')' SEMICOLON { // u read into a var, like read(b);
+        $$ = makeReadNode($3);
     };
 
 OutputStmt : WRITE '(' E ')' SEMICOLON { // u can write an expression like write(5+8);
         $$ = makeWriteNode($3);
     };
 
-AsgStmt : ID ASSIGN E SEMICOLON {
-        $$ = makeAssignNode(makeIdNode($1), $3);
+AsgStmt : Variable ASSIGN E SEMICOLON {
+        $$ = makeAssignNode($1, $3);
     };
 
 IfStmt : IF '(' E ')' THEN Slist ELSE Slist ENDIF SEMICOLON {
@@ -204,7 +248,6 @@ RepeatStmt : REPEAT Slist UNTIL '(' E ')' SEMICOLON {
 DoWhileStmt : DO Slist WHILE '(' E ')' SEMICOLON {
         $$ = makeDoWhileNode($2, $5);
     };
-
     
 E : E PLUS E {
         $$ = makeOperatorNode("+", $1, $3);
@@ -242,9 +285,12 @@ E : E PLUS E {
     | NUM {
         $$ = makeNumNode($1);
     }
-    | ID {
-        $$ = makeIdNode($1);
-    };
+    | STRING {
+        $$ = makeStrNode($1);
+    }
+    | Variable {
+        $$ = $1;
+    } ;
 
 %%
 

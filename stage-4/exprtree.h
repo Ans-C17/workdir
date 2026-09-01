@@ -5,6 +5,7 @@ enum {
     NODE_NUM,
     NODE_STR,
     NODE_ID,
+    NODE_ARRAY,
     NODE_PLUS,
     NODE_MINUS,
     NODE_MUL,
@@ -36,7 +37,7 @@ enum {
 typedef struct VarList { // like how Slist is stored as AST everytime reduction happens,
     // varlist should store each varname per reduction, we do it as linked list
     char* name;
-    int size; // for arrays
+    int size; // arrays aanel we declare value for this size
     struct VarList* next;
 } VarList;
 
@@ -48,7 +49,7 @@ typedef struct Gsymbol {
     struct Gsymbol* next;
 } Gsymbol;
 
-typedef struct tnode { 
+typedef struct tnode {
 	int type; // type of variable - INT, BOOL for now
 	int val; // value of a number for NUM nodes - 5, 10
 	char* varname; // name of a variable for ID nodes - a,b,...,z
@@ -77,6 +78,8 @@ tnode* makeContinueNode();
 
 tnode* makeRepeatNode(tnode* body, tnode* cond);
 tnode* makeDoWhileNode(tnode* body, tnode* cond);
+
+tnode* makeArrayNode(char* name, tnode* index); // for accessing array elements
 
 struct Gsymbol* Lookup(char* name);
 void Install(char* name, int type, int size); // add new var to symbol table

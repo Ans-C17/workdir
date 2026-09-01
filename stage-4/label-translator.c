@@ -47,6 +47,14 @@ int isLabel(char* line, char* label) {
 
     if (colon == NULL)
         return 0;
+    
+    char *p = colon + 1;
+    while (*p != '\0') {
+        if (*p != ' ' && *p != '\t' && *p != '\n' && *p != '\r')
+            return 0;
+
+        p++;
+    }
 
     // Make sure the colon occurs immediately after the label name, with no spaces
     int length = colon - line;

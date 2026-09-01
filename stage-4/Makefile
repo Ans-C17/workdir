@@ -1,10 +1,12 @@
+.SUFFIXES:
+
 all: exprtree label-translator
 
 exprtree: exprtree.tab.c lex.yy.c exprtree.c codegen.c
 	gcc exprtree.tab.c lex.yy.c exprtree.c codegen.c -o exprtree
 
-labelTranslator: label-translator.c
-	gcc labelTranslator.c -o labelTranslator
+label-translator: label-translator.c
+	gcc label-translator.c -o label-translator
 
 exprtree.tab.c exprtree.tab.h: exprtree.y
 	bison -d exprtree.y

@@ -46,6 +46,17 @@ void popLoop() {
     if (loopTop >= 0) loopTop--;
 }
 
+int getArrayAddress(tnode *t) { // computes and returns the register containing the address of an array element
+    int indexReg = codeGen(t->left); // compute the index, it can be like arr[5] or arr[4 * 9]; store the result and return reg
+    int baseReg = getReg(); // after like indexReg stores value, like R1 = 7, baseReg stores like 4059 (arr start addr)
+
+    fprintf(targetFile, "MOV R%d, %d\n", baseReg, t->Gentry->binding);
+    fprintf(targetFile, "ADD R%d, R%d\n", indexReg, baseReg); // arr[i] = arr_start_addr + i, i.e baseReg + indexReg
+
+    freeReg();
+    return indexReg;
+}
+
 int codeGen(tnode* t) {
     if (t == NULL)
         return -1;
@@ -68,6 +79,13 @@ int codeGen(tnode* t) {
             int addr = t->Gentry->binding;
             fprintf(targetFile, "MOV R%d, [%d]\n", r, addr); // [5000] means fetch value from addr 5000
             return r;
+        }
+
+        case NODE_ARRAY: { // get the value stored at an array element
+            int addrReg = getArrayAddress(t); // given arr[2], find where it is located (not the value of it)
+            fprintf(targetFile, "MOV R%d, [R%d]\n", addrReg, addrReg); // get value stored at that addr
+            // i.e R1 = memory[R1] -> get value stored at R1's mem addr and  store to R1
+            return addrReg;
         }
 
         // fall through - group all 4 ops together
@@ -141,8 +159,16 @@ int codeGen(tnode* t) {
 
         case NODE_ASSIGN: {
             int r = codeGen(t->right);
-            int addr = t->left->Gentry->binding;
-            fprintf(targetFile, "MOV [%d], R%d\n", addr, r); // Overwrite the RAM box (4096 + i) with the VALUE currently sitting in Ri
+            
+            if (t->left->nodetype == NODE_ID) {
+                int addr = t->left->Gentry->binding;
+                fprintf(targetFile, "MOV [%d], R%d\n", addr, r); // Overwrite the RAM box (4096 + i) with the VALUE currently sitting in Ri
+            } else if (t->left->nodetype == NODE_ARRAY) { // handle arr[i] = value
+                int addrReg = getArrayAddress(t->left);
+                fprintf(targetFile, "MOV [R%d], R%d\n", addrReg, r);
+                freeReg();
+            }
+            
             freeReg();
             return -1;
         }

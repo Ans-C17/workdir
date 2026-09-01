@@ -19,6 +19,9 @@ void yyerror(const char* s);
 "*" { return MUL; }
 "/" { return DIV; }
 
+"[" { return '['; }
+"]" { return ']'; }
+
 "(" { return '('; }
 ")" { return ')'; }
 "," { return ','; }
@@ -57,10 +60,15 @@ void yyerror(const char* s);
 
 "repeat"    { return REPEAT; }
 "until"     { return UNTIL; }
-"dowhile"   { return DOWHILE; }
 
 "=" { return ASSIGN; }
 ";" { return SEMICOLON; }
+
+\"[^\"]*\" {
+    yytext[yyleng - 1] = '\0';
+    yylval.str = strdup(yytext + 1);
+    return STRING;
+}
 
 [a-zA-Z][a-zA-Z0-9]* { // * => 0 or more; + => 1 or more
     yylval.str = strdup(yytext); // makes a copy of any string. (in the heap;)

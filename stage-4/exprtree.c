@@ -81,7 +81,7 @@ tnode* makeNumNode(int n) {
 }
 
 tnode* makeStrNode(char *s) {
-    return createTree(0, TYPE_STR, NODE_STR, s, NULL, NULL, NULL);
+    return createTree(0, TYPE_STR, NODE_STR, s, NULL, NULL, NULL); // we put s into varname field as first arg (int val) is int
 }
 
 tnode* makeOperatorNode(char* op, tnode* l, tnode* r) {
@@ -156,8 +156,9 @@ tnode* makeIdNode(char* name) {
 }
 
 tnode* makeAssignNode(tnode* id, tnode* expr) {
-    if (expr->type != TYPE_INT) { // u can only assign an int (a = <bool> is gay)
+    if (id->type != expr->type) { // u can only assign an int/str (a = <bool> is gay)
         // eg: a = 5 > 3
+        // i.e id type and rhs type same avanam
         fprintf(stderr, "Type mismatch\n");
         exit(1);
     }
@@ -209,4 +210,34 @@ tnode* makeRepeatNode(tnode* body, tnode* cond) {
 
 tnode* makeDoWhileNode(tnode* body, tnode* cond) {
     return createTree(0, TYPE_BOOL, NODE_DOWHILE, NULL, cond, NULL, body);
+}
+
+// for an array with 3 elements, the ast looks like this
+//                   CONNECTOR
+//               /            \
+//           CONNECTOR       ASSIGN
+//           /       \        /    \
+//       ASSIGN     ASSIGN   ARRAY  30
+//       /   \       /  \    |
+//    ARRAY  10   ARRAY 20  some-expression
+//      |            |
+//    NUM(0)       NUM(1)
+
+tnode* makeArrayNode(char* name, tnode* index) { // index is an expression E 
+    struct Gsymbol* entry = Lookup(name);
+
+    if (entry == NULL) {
+        printf("Error: Variable %s not declared\n", name);
+        exit(1);
+    }
+
+    if (index->type != TYPE_INT) {
+        printf("Error: Array index must be an integer\n");
+        exit(1);
+    }
+
+    tnode* node = createTree(0, entry->type, NODE_ARRAY, name, index, NULL, NULL);
+    node->Gentry = entry;
+
+    return node;
 }
