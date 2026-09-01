@@ -112,6 +112,10 @@ int codeGen(tnode* t) {
                 case NODE_DIV:
                     fprintf(targetFile, "DIV R%d, R%d\n", leftReg, rightReg);
                     break;
+
+                case NODE_MOD:
+                    fprintf(targetFile, "MOD R%d, R%d\n", leftReg, rightReg);
+                    break;
             }
 
             freeReg(); // free rightReg
@@ -168,7 +172,7 @@ int codeGen(tnode* t) {
                 fprintf(targetFile, "MOV [R%d], R%d\n", addrReg, r);
                 freeReg();
             }
-            
+
             freeReg();
             return -1;
         }
@@ -220,23 +224,39 @@ int codeGen(tnode* t) {
         }
 
         case NODE_READ: {
-            int addr = t->left->Gentry->binding;
-            
             // For Read, the ABI contract says:
             // Arg1 = -1 (-1 = stdin)
             // Arg2 = Buffer (here buffer means which reg to store the value into)
             // Arg3 = unused
             // i.e take value from stdin and store it in buffer
 
-            fprintf(targetFile, "MOV R2, \"Read\"\n");
-            fprintf(targetFile, "PUSH R2\n");
-            fprintf(targetFile, "MOV R2, -1\n");
-            fprintf(targetFile, "PUSH R2\n");
-            fprintf(targetFile, "MOV R2, %d\n", addr);
-            fprintf(targetFile, "PUSH R2\n");
-            fprintf(targetFile, "PUSH R2\n");
-            fprintf(targetFile, "PUSH R0\n");
-            fprintf(targetFile, "CALL 0\n");
+            if (t->left->nodetype == NODE_ID) {
+                int addr = t->left->Gentry->binding;
+
+                fprintf(targetFile, "MOV R2, \"Read\"\n");
+                fprintf(targetFile, "PUSH R2\n");
+                fprintf(targetFile, "MOV R2, -1\n");
+                fprintf(targetFile, "PUSH R2\n");
+                fprintf(targetFile, "MOV R2, %d\n", addr);
+                fprintf(targetFile, "PUSH R2\n");
+                fprintf(targetFile, "PUSH R2\n");
+                fprintf(targetFile, "PUSH R0\n");
+                fprintf(targetFile, "CALL 0\n");
+            }
+            else if (t->left->nodetype == NODE_ARRAY) {
+                int addrReg = getArrayAddress(t->left);
+
+                fprintf(targetFile, "MOV R2, \"Read\"\n");
+                fprintf(targetFile, "PUSH R2\n");
+                fprintf(targetFile, "MOV R2, -1\n");
+                fprintf(targetFile, "PUSH R2\n");
+                fprintf(targetFile, "PUSH R%d\n", addrReg);
+                fprintf(targetFile, "PUSH R2\n");
+                fprintf(targetFile, "PUSH R0\n");
+                fprintf(targetFile, "CALL 0\n");
+
+                freeReg();
+            }
 
             // remove return value + 3 arguments + function code
             fprintf(targetFile, "POP R0\n");

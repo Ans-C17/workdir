@@ -18,6 +18,7 @@ void yyerror(const char* s);
 "-" { return MINUS; }
 "*" { return MUL; }
 "/" { return DIV; }
+"%" {return MOD; }
 
 "[" { return '['; }
 "]" { return ']'; }

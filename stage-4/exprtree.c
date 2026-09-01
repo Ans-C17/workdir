@@ -104,6 +104,10 @@ tnode* makeOperatorNode(char* op, tnode* l, tnode* r) {
         nodetype = NODE_DIV;
         type = TYPE_INT;
     }
+    else if (strcmp(op, "%") == 0) {
+        nodetype = NODE_MOD;
+        type = TYPE_INT;
+    }
     else if (strcmp(op, "<") == 0) {
         nodetype = NODE_LT;
         type = TYPE_BOOL;

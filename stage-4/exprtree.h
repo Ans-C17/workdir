@@ -10,6 +10,7 @@ enum {
     NODE_MINUS,
     NODE_MUL,
     NODE_DIV,
+    NODE_MOD,
     NODE_READ,
     NODE_WRITE,
     NODE_ASSIGN,

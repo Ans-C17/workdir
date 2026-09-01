@@ -30,7 +30,7 @@ FILE* targetFile;
 
 // these guys dont return a semantic value
 // oru if kanda u know its an if, ok, but oru num kanda u need the value of the num, hence <num> exists
-%token PLUS MINUS MUL DIV
+%token PLUS MINUS MUL DIV MOD
 %token LT GT LE GE EQ NE
 
 %token T_BEGIN T_END 
@@ -59,7 +59,7 @@ FILE* targetFile;
 %left EQ NE // a + 5 < b * 2 -> (a + 5) < (b * 2) => arithmetic before comparison
 %left LT GT LE GE // conventionally equality operators lower precedence than relation operators
 %left PLUS MINUS
-%left MUL DIV
+%left MUL DIV MOD
 
 %start Program
 
@@ -260,6 +260,9 @@ E : E PLUS E {
     }
     | E DIV E {
         $$ = makeOperatorNode("/", $1, $3);
+    }
+    | E MOD E {
+        $$ = makeOperatorNode("%", $1, $3);
     }
     | '(' E ')' {
         $$ = $2;
