@@ -85,7 +85,7 @@ Decl : Type VarList SEMICOLON {
         // int c, d; (in two lines)
         // the varlist gon be like two diff linked lists, and each time reduction is done, we traverse thru
         while (temp) {
-            Install(temp->name, $1, temp->size); // this function adds shi into the symbol table
+            Install(temp->name, $1, temp->size, temp->rows, temp->cols); // this function adds shi into the symbol table
             temp = temp->next;
         }
     };
@@ -105,7 +105,29 @@ This supports all of these:
     int a, b[5];
     int a[10], b, c[20];
 */
-VarList : VarList ',' ID '[' NUM ']' { 
+VarList : VarList ',' ID '[' NUM ']' '[' NUM ']' {
+        VarList* newVar = malloc(sizeof(VarList));
+        newVar->name = $3;
+        newVar->rows = $5;
+        newVar->cols = $8;
+        newVar->size = $5 * $8;
+        newVar->next = NULL;
+
+        VarList* temp = $1;
+        while (temp->next != NULL) temp = temp->next;
+        temp->next = newVar;
+        $$ = $1;
+    }
+    | ID '[' NUM ']' '[' NUM ']' { 
+        VarList *newVar = malloc(sizeof(struct VarList));
+        newVar->name = $1;
+        newVar->rows = $3;
+        newVar->cols = $6;
+        newVar->size = $3 * $6;
+        newVar->next = NULL;
+        $$ = newVar;
+    }
+    | VarList ',' ID '[' NUM ']' { 
         VarList* newVar = malloc(sizeof(VarList));
         newVar->name = $3;
         newVar->size = $5; // array ayond size koduk
@@ -154,6 +176,9 @@ Variable : ID {
     | ID '[' E ']' { // this is strictly for accessing array elements only, not declaration
         // also E aayond we can do like arr[i + 5 * 8] lol
         $$ = makeArrayNode($1, $3);
+    }
+    | ID '[' E ']' '[' E ']' {
+        $$ = makeArray2DNode($1, $3, $6);
     };
 
 // matte missinte bottom up parser varacha manasilavum (stack, i/p, action)

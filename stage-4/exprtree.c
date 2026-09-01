@@ -18,7 +18,7 @@ Gsymbol* Lookup(char *name) { // searches the symbol table and returns the addre
     return NULL;
 }
 
-void Install(char *name, int type, int size) { // entry to linked list
+void Install(char *name, int type, int size, int rows, int cols) { // entry to linked list
     if (Lookup(name)) {
         printf("Error: Variable %s already declared\n", name);
         exit(1);
@@ -29,6 +29,8 @@ void Install(char *name, int type, int size) { // entry to linked list
     newEntry->name = strdup(name);
     newEntry->type = type;
     newEntry->size = size;
+    newEntry->rows = rows;
+	newEntry->cols = cols;
     newEntry->binding = nextBinding;
     nextBinding = nextBinding + size;
     newEntry->next = NULL;
@@ -244,4 +246,28 @@ tnode* makeArrayNode(char* name, tnode* index) { // index is an expression E
     node->Gentry = entry;
 
     return node;
+}
+
+tnode* makeArray2DNode(char *name, tnode *rowIndex, tnode *colIndex) {
+	struct Gsymbol *entry = Lookup(name);
+
+	if (entry == NULL) {
+		printf("Error: Variable %s not declared\n", name);
+		exit(1);
+	}
+
+	if (entry->rows == 1 || entry->cols == 1) {
+		printf("Error: %s is not a 2D array\n", name);
+		exit(1);
+	} // idt ith venam
+
+	if (rowIndex->type != TYPE_INT || colIndex->type != TYPE_INT) {
+		printf("Error: Array indices must be integers\n");
+		exit(1);
+	}
+
+	tnode *node = createTree(0, entry->type, NODE_ARRAY2D, name, rowIndex, colIndex, NULL);
+	node->Gentry = entry;
+
+	return node;
 }

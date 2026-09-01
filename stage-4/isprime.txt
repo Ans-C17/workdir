@@ -4,6 +4,12 @@ enddecl
 
 begin
     read(n);
+    if (n < 1) then
+        write("Cannot determine");
+    endif;
+    if (n == 1) then
+        write("Neither prime nor composite");
+    endif;
     j = 0;
     if (n % 2 == 0) then
         j = 1;

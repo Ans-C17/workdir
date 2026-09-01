@@ -57,6 +57,27 @@ int getArrayAddress(tnode *t) { // computes and returns the register containing 
     return indexReg;
 }
 
+int getArray2DAddress(tnode *t) {
+	int rowReg = codeGen(t->left);
+	int colReg = codeGen(t->middle);
+	int baseReg = getReg(); 
+	int colsReg = getReg();
+
+    // address(arr[i][j]) = base + (i × number_of_columns) + j
+
+	fprintf(targetFile, "MOV R%d, %d\n", baseReg, t->Gentry->binding);
+	fprintf(targetFile, "MOV R%d, %d\n", colsReg, t->Gentry->cols); // set colsReg = number of cols
+	fprintf(targetFile, "MUL R%d, R%d\n", rowReg, colsReg); // i * no_of_cols
+	fprintf(targetFile, "ADD R%d, R%d\n", rowReg, colReg); // + col_index
+	fprintf(targetFile, "ADD R%d, R%d\n", rowReg, baseReg); // base + 
+
+	freeReg();
+	freeReg();
+	freeReg();
+
+	return rowReg;
+}
+
 int codeGen(tnode* t) {
     if (t == NULL)
         return -1;
@@ -88,11 +109,18 @@ int codeGen(tnode* t) {
             return addrReg;
         }
 
+        case NODE_ARRAY2D: {
+            int addrReg = getArray2DAddress(t);
+            fprintf(targetFile, "MOV R%d, [R%d]\n", addrReg, addrReg);
+            return addrReg;
+        }
+
         // fall through - group all 4 ops together
         case NODE_PLUS:
         case NODE_MINUS:
         case NODE_MUL:
-        case NODE_DIV: { 
+        case NODE_DIV: 
+        case NODE_MOD: { 
             int leftReg = codeGen(t->left);
             int rightReg = codeGen(t->right);
 
@@ -171,6 +199,10 @@ int codeGen(tnode* t) {
                 int addrReg = getArrayAddress(t->left);
                 fprintf(targetFile, "MOV [R%d], R%d\n", addrReg, r);
                 freeReg();
+            } else if (t->left->nodetype == NODE_ARRAY2D) {
+                int addrReg = getArray2DAddress(t->left);
+                fprintf(targetFile, "MOV [R%d], R%d\n", addrReg, r);
+                freeReg();
             }
 
             freeReg();
@@ -242,9 +274,23 @@ int codeGen(tnode* t) {
                 fprintf(targetFile, "PUSH R2\n");
                 fprintf(targetFile, "PUSH R0\n");
                 fprintf(targetFile, "CALL 0\n");
-            }
+            } 
             else if (t->left->nodetype == NODE_ARRAY) {
                 int addrReg = getArrayAddress(t->left);
+
+                fprintf(targetFile, "MOV R2, \"Read\"\n");
+                fprintf(targetFile, "PUSH R2\n");
+                fprintf(targetFile, "MOV R2, -1\n");
+                fprintf(targetFile, "PUSH R2\n");
+                fprintf(targetFile, "PUSH R%d\n", addrReg);
+                fprintf(targetFile, "PUSH R2\n");
+                fprintf(targetFile, "PUSH R0\n");
+                fprintf(targetFile, "CALL 0\n");
+
+                freeReg();
+            } 
+            else if (t->left->nodetype == NODE_ARRAY2D) { // EX1: handle read(arr[i][j])
+                int addrReg = getArray2DAddress(t->left);
 
                 fprintf(targetFile, "MOV R2, \"Read\"\n");
                 fprintf(targetFile, "PUSH R2\n");

@@ -6,6 +6,7 @@ enum {
     NODE_STR,
     NODE_ID,
     NODE_ARRAY,
+    NODE_ARRAY2D,
     NODE_PLUS,
     NODE_MINUS,
     NODE_MUL,
@@ -39,13 +40,17 @@ typedef struct VarList { // like how Slist is stored as AST everytime reduction 
     // varlist should store each varname per reduction, we do it as linked list
     char* name;
     int size; // arrays aanel we declare value for this size
+    int rows; // number of rows for 2D array
+    int cols; // number of columns for 2D array
     struct VarList* next;
 } VarList;
 
 typedef struct Gsymbol {
     char *name;
     int type;
-    int size; // default 1
+    int size; // default 1, we take the value of varlist and copy it here, gtable is the collection of all varlists
+    int rows;
+	int cols;
     int binding;
     struct Gsymbol* next;
 } Gsymbol;
@@ -81,9 +86,10 @@ tnode* makeRepeatNode(tnode* body, tnode* cond);
 tnode* makeDoWhileNode(tnode* body, tnode* cond);
 
 tnode* makeArrayNode(char* name, tnode* index); // for accessing array elements
+tnode* makeArray2DNode(char *name, tnode *rowIndex, tnode *colIndex);
 
 struct Gsymbol* Lookup(char* name);
-void Install(char* name, int type, int size); // add new var to symbol table
+void Install(char* name, int type, int size, int rows, int cols); // add new var to symbol table    
 void PrintSymbolTable();
 
 #endif
