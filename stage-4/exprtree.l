@@ -21,6 +21,7 @@ void yyerror(const char* s);
 
 "(" { return '('; }
 ")" { return ')'; }
+"," { return ','; }
  
 "<=" { return LE; } // flex dont rly care about ordering, it checks for longest match first
 "<" { return LT; } // if length same only it checks for order and returns whatever matched before
@@ -33,6 +34,12 @@ void yyerror(const char* s);
 
 "begin" { return T_BEGIN; }
 "end" { return T_END; }
+
+"decl" { return DECL; }
+"enddecl" { return ENDDECL; }
+"int" { return INT; }
+"str" { return STR; }
+
 "read" { return READ; }
 "write" { return WRITE; }
 
@@ -55,12 +62,15 @@ void yyerror(const char* s);
 "=" { return ASSIGN; }
 ";" { return SEMICOLON; }
 
-[a-z] { // variables
-    yylval.str = strdup(yytext);
+[a-zA-Z][a-zA-Z0-9]* { // * => 0 or more; + => 1 or more
+    yylval.str = strdup(yytext); // makes a copy of any string. (in the heap;)
+    // strdup only allocs as much memory u need, wont reserve kore bytes that go to waste
+    // ethra bytes aano size, athrakke allocate cheyyu [malloc(sizeof(string))]
     return ID;
 }
 
 . {
+    printf("Unknown character: '%c' (ASCII %d)\n", yytext[0], yytext[0]);
     yyerror("Unknown character");
     exit(1);
 }

@@ -2,22 +2,14 @@ begin
 
 a = 0;
 
-while (a < 3) do
-
-    b = 0;
-
-    while (b < 5) do
-
-        if (b == 2) then
-            break;
-        endif;
-
-        write(b);
-        b = b + 1;
-
-    endwhile;
-
+while (a < 5) do
     a = a + 1;
+
+    if (a == 3) then
+        write(a);
+    else
+        write(a * 100);
+    endif;
 
 endwhile;
 

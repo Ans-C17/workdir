@@ -56,10 +56,16 @@ int codeGen(tnode* t) {
             fprintf(targetFile, "MOV R%d, %d\n", r, t->val);
             return r;
         }
+
+        case NODE_STR: {
+            int r = getReg();
+            fprintf(targetFile, "MOV R%d, \"%s\"\n", r, t->varname);
+            return r;
+        }
         
         case NODE_ID: { // whenever stuff like d = a * 3 + b comes -> so we fetch values of them and stores it in reg
             int r = getReg();
-            int addr = 4096 + (t->varname[0] - 'a');
+            int addr = t->Gentry->binding;
             fprintf(targetFile, "MOV R%d, [%d]\n", r, addr); // [5000] means fetch value from addr 5000
             return r;
         }
@@ -135,7 +141,7 @@ int codeGen(tnode* t) {
 
         case NODE_ASSIGN: {
             int r = codeGen(t->right);
-            int addr = 4096 + (t->left->varname[0] - 'a');
+            int addr = t->left->Gentry->binding;
             fprintf(targetFile, "MOV [%d], R%d\n", addr, r); // Overwrite the RAM box (4096 + i) with the VALUE currently sitting in Ri
             freeReg();
             return -1;
@@ -188,7 +194,7 @@ int codeGen(tnode* t) {
         }
 
         case NODE_READ: {
-            int addr = 4096 + (t->left->varname[0] - 'a');
+            int addr = t->left->Gentry->binding;
             
             // For Read, the ABI contract says:
             // Arg1 = -1 (-1 = stdin)
