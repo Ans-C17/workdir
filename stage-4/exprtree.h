@@ -5,6 +5,8 @@ enum {
     NODE_NUM,
     NODE_STR,
     NODE_ID,
+    NODE_ADDRESS,
+    NODE_DEREFERENCE,
     NODE_ARRAY,
     NODE_ARRAY2D,
     NODE_PLUS,
@@ -33,7 +35,9 @@ enum {
 enum {
 	TYPE_INT,
     TYPE_BOOL,
-    TYPE_STR
+    TYPE_STR,
+    TYPE_INT_PTR,
+    TYPE_STR_PTR
 };
 
 typedef struct VarList { // like how Slist is stored as AST everytime reduction happens,
@@ -42,6 +46,7 @@ typedef struct VarList { // like how Slist is stored as AST everytime reduction 
     int size; // arrays aanel we declare value for this size
     int rows; // number of rows for 2D array
     int cols; // number of columns for 2D array
+    int isPointer; // 1 if pointer, else 0
     struct VarList* next;
 } VarList;
 
@@ -87,6 +92,9 @@ tnode* makeDoWhileNode(tnode* body, tnode* cond);
 
 tnode* makeArrayNode(char* name, tnode* index); // for accessing array elements
 tnode* makeArray2DNode(char *name, tnode *rowIndex, tnode *colIndex);
+
+tnode* makeAddressNode(tnode *var); // creates an AST node for the address-of operator
+tnode* makeDereferenceNode(tnode *ptr); // creates an AST node for dereferencing a pointer
 
 struct Gsymbol* Lookup(char* name);
 void Install(char* name, int type, int size, int rows, int cols); // add new var to symbol table    

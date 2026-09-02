@@ -1,0 +1,32 @@
+decl
+    int n;
+    int a[5][5];
+    int i, j, sum;
+enddecl
+
+begin
+    read(n);
+    sum = 0;
+
+    i = 0;
+    while (i < n) do
+        j = 0;
+        while (j < n) do
+            read(a[i][j]);
+            j = j + 1;
+        endwhile;
+        i = i + 1;
+    endwhile;
+
+    i = 0;
+    while (i < n) do
+        j = 0;
+        while (j < n) do
+            sum = sum + a[i][j];
+            j = j + 1;
+        endwhile;
+        i = i + 1;
+    endwhile;
+
+    write(sum);
+end;

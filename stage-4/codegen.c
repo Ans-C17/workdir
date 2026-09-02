@@ -102,6 +102,18 @@ int codeGen(tnode* t) {
             return r;
         }
 
+        case NODE_ADDRESS: { // generates the address of a variable
+            int r = getReg();
+            fprintf(targetFile, "MOV R%d, %d\n", r, t->left->Gentry->binding);
+            return r;
+        }
+        
+        case NODE_DEREFERENCE: { // gets the value stored at the address held by a pointer
+            int r = codeGen(t->left);
+            fprintf(targetFile, "MOV R%d, [R%d]\n", r, r);
+            return r;
+        }
+
         case NODE_ARRAY: { // get the value stored at an array element
             int addrReg = getArrayAddress(t); // given arr[2], find where it is located (not the value of it)
             fprintf(targetFile, "MOV R%d, [R%d]\n", addrReg, addrReg); // get value stored at that addr
@@ -201,6 +213,10 @@ int codeGen(tnode* t) {
                 freeReg();
             } else if (t->left->nodetype == NODE_ARRAY2D) {
                 int addrReg = getArray2DAddress(t->left);
+                fprintf(targetFile, "MOV [R%d], R%d\n", addrReg, r);
+                freeReg();
+            } else if (t->left->nodetype == NODE_DEREFERENCE) { // assigns a value through a pointer
+                int addrReg = codeGen(t->left->left);
                 fprintf(targetFile, "MOV [R%d], R%d\n", addrReg, r);
                 freeReg();
             }

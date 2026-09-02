@@ -33,6 +33,8 @@ FILE* targetFile;
 %token PLUS MINUS MUL DIV MOD
 %token LT GT LE GE EQ NE
 
+%token ADDRESS
+
 %token T_BEGIN T_END 
 %token DECL ENDDECL
 %token INT STR
@@ -78,14 +80,20 @@ Declarations : DECL DeclList ENDDECL | DECL ENDDECL;
 DeclList : DeclList Decl | Decl;
 
 Decl : Type VarList SEMICOLON {
-        VarList* temp = $2;
-
-        // if i have like 
+    // if i have like 
         // int a, b;
         // int c, d; (in two lines)
         // the varlist gon be like two diff linked lists, and each time reduction is done, we traverse thru
-        while (temp) {
-            Install(temp->name, $1, temp->size, temp->rows, temp->cols); // this function adds shi into the symbol table
+        VarList* temp = $2;
+
+        while (temp != NULL) {
+            int varType = $1;
+            if (temp->isPointer) {
+                if ($1 == TYPE_INT) varType = TYPE_INT_PTR;
+                else if ($1 == TYPE_STR) varType = TYPE_STR_PTR;
+            }
+
+            Install(temp->name, varType, temp->size, temp->rows, temp->cols); // this function adds shi into the symbol table
             temp = temp->next;
         }
     };
@@ -111,6 +119,7 @@ VarList : VarList ',' ID '[' NUM ']' '[' NUM ']' {
         newVar->rows = $5;
         newVar->cols = $8;
         newVar->size = $5 * $8;
+        newVar->isPointer = 0;
         newVar->next = NULL;
 
         VarList* temp = $1;
@@ -124,6 +133,7 @@ VarList : VarList ',' ID '[' NUM ']' '[' NUM ']' {
         newVar->rows = $3;
         newVar->cols = $6;
         newVar->size = $3 * $6;
+        newVar->isPointer = 0;
         newVar->next = NULL;
         $$ = newVar;
     }
@@ -131,6 +141,7 @@ VarList : VarList ',' ID '[' NUM ']' '[' NUM ']' {
         VarList* newVar = malloc(sizeof(VarList));
         newVar->name = $3;
         newVar->size = $5; // array ayond size koduk
+        newVar->isPointer = 0;
         newVar->next = NULL;
 
         VarList* temp = $1;
@@ -142,6 +153,7 @@ VarList : VarList ',' ID '[' NUM ']' '[' NUM ']' {
         VarList* newVar = malloc(sizeof(VarList));
         newVar->name = $1;
         newVar->size = $3;
+        newVar->isPointer = 0;
         newVar->next = NULL;
         $$ = newVar;
     }
@@ -149,6 +161,7 @@ VarList : VarList ',' ID '[' NUM ']' '[' NUM ']' {
         VarList* newVar = malloc(sizeof(VarList));
         newVar->name = $3;
         newVar->size = 1;
+        newVar->isPointer = 0;
         newVar->next = NULL;
 
         VarList* temp = $1;
@@ -163,8 +176,29 @@ VarList : VarList ',' ID '[' NUM ']' '[' NUM ']' {
         VarList* newVar = malloc(sizeof(VarList));
         newVar->name = $1;
         newVar->size = 1;
+        newVar->isPointer = 0;
         newVar->next = NULL;
 
+        $$ = newVar;
+    } 
+    | VarList ',' MUL ID { // adds a pointer variable to the declaration list
+        VarList* newVar = malloc(sizeof(VarList));
+        newVar->name = $4;
+        newVar->isPointer = 1;
+        newVar->size = 1;
+        newVar->next = NULL;
+        
+        VarList *temp = $1;
+        while (temp->next != NULL) temp = temp->next;
+        temp->next = newVar;
+        $$ = $1;
+    } 
+    | MUL ID {
+        VarList *newVar = malloc(sizeof(VarList));
+        newVar->name = $2;
+        newVar->isPointer = 1;
+        newVar->size = 1;
+        newVar->next = NULL;
         $$ = newVar;
     };
 
@@ -179,6 +213,9 @@ Variable : ID {
     }
     | ID '[' E ']' '[' E ']' {
         $$ = makeArray2DNode($1, $3, $6);
+    }
+    | MUL Variable { // allows a dereferenced pointer as an assignment target
+        $$ = makeDereferenceNode($2);
     };
 
 // matte missinte bottom up parser varacha manasilavum (stack, i/p, action)
@@ -315,6 +352,9 @@ E : E PLUS E {
     }
     | STRING {
         $$ = makeStrNode($1);
+    }
+    | ADDRESS Variable { // address-of operator returns the address of a variable
+        $$ = makeAddressNode($2);
     }
     | Variable {
         $$ = $1;

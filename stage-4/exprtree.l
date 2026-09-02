@@ -20,6 +20,8 @@ void yyerror(const char* s);
 "/" { return DIV; }
 "%" {return MOD; }
 
+"&" { return ADDRESS; }
+
 "[" { return '['; }
 "]" { return ']'; }
 

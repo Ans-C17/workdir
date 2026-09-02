@@ -57,10 +57,49 @@ void PrintSymbolTable() {
             printf("INT\t");
         else if (temp->type == TYPE_STR)
             printf("STR\t");
+        else if (temp->type == TYPE_INT_PTR)
+            printf("INT_PTR\t");
+        else if (temp->type == TYPE_STR_PTR)
+            printf("STR_PTR\t");
 
         printf("%d\t%d\n", temp->size, temp->binding);
         temp = temp->next;
     }
+}
+
+tnode* makeAddressNode(tnode *var) { // creates an AST node for the address-of operator
+    if (var->nodetype != NODE_ID) {
+        fprintf(stderr, "Address-of operator can only be used with a variable\n");
+        exit(1);
+    }
+
+    int pointerType;
+
+    if (var->Gentry->type == TYPE_INT)
+        pointerType = TYPE_INT_PTR;
+    else if (var->Gentry->type == TYPE_STR)
+        pointerType = TYPE_STR_PTR;
+    else {
+        fprintf(stderr, "Cannot take address of a pointer\n");
+        exit(1);
+    }
+
+    return createTree(0, pointerType, NODE_ADDRESS, NULL, var, NULL, NULL);
+}
+
+tnode* makeDereferenceNode(tnode *ptr) { // EX2: creates an AST node for dereferencing a pointer
+    int valueType;
+
+    if (ptr->type == TYPE_INT_PTR)
+        valueType = TYPE_INT;
+    else if (ptr->type == TYPE_STR_PTR)
+        valueType = TYPE_STR;
+    else {
+        fprintf(stderr, "Cannot dereference a non-pointer\n");
+        exit(1);
+    }
+
+    return createTree(0, valueType, NODE_DEREFERENCE, NULL, ptr, NULL, NULL);
 }
 
 tnode* createTree(int val, int type, int nodetype, char* varname, tnode* l, tnode* m, tnode* r) {
@@ -255,11 +294,6 @@ tnode* makeArray2DNode(char *name, tnode *rowIndex, tnode *colIndex) {
 		printf("Error: Variable %s not declared\n", name);
 		exit(1);
 	}
-
-	if (entry->rows == 1 || entry->cols == 1) {
-		printf("Error: %s is not a 2D array\n", name);
-		exit(1);
-	} // idt ith venam
 
 	if (rowIndex->type != TYPE_INT || colIndex->type != TYPE_INT) {
 		printf("Error: Array indices must be integers\n");
