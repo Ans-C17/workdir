@@ -281,6 +281,14 @@ tnode* makeArrayNode(char* name, tnode* index) { // index is an expression E
         exit(1);
     }
 
+    if (index->nodetype == NODE_NUM) {
+        if (index->val >= entry->size) {
+            fprintf(stderr, "Error: Array index %d out of bounds (array size %d)\n", 
+                    index->val, entry->size);
+            exit(1);
+        }
+    }
+
     tnode* node = createTree(0, entry->type, NODE_ARRAY, name, index, NULL, NULL);
     node->Gentry = entry;
 

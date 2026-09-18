@@ -81,22 +81,22 @@ DeclList : DeclList Decl | Decl;
 
 Decl : Type VarList SEMICOLON {
     // if i have like 
-        // int a, b;
-        // int c, d; (in two lines)
-        // the varlist gon be like two diff linked lists, and each time reduction is done, we traverse thru
-        VarList* temp = $2;
+    // int a, b;
+    // int c, d; (in two lines)
+    // the varlist gon be like two diff linked lists, and each time reduction is done, we traverse thru
+    VarList* temp = $2;
 
-        while (temp != NULL) {
-            int varType = $1;
-            if (temp->isPointer) {
-                if ($1 == TYPE_INT) varType = TYPE_INT_PTR;
-                else if ($1 == TYPE_STR) varType = TYPE_STR_PTR;
-            }
-
-            Install(temp->name, varType, temp->size, temp->rows, temp->cols); // this function adds shi into the symbol table
-            temp = temp->next;
+    while (temp != NULL) {
+        int varType = $1;
+        if (temp->isPointer) {
+            if ($1 == TYPE_INT) varType = TYPE_INT_PTR;
+            else if ($1 == TYPE_STR) varType = TYPE_STR_PTR;
         }
-    };
+
+        Install(temp->name, varType, temp->size, temp->rows, temp->cols); // this function adds shi into the symbol table
+        temp = temp->next;
+    }
+};
 
 Type : INT {
         $$ = TYPE_INT;

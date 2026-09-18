@@ -104,7 +104,7 @@ int codeGen(tnode* t) {
 
         case NODE_ADDRESS: { // generates the address of a variable
             int r = getReg();
-            fprintf(targetFile, "MOV R%d, %d\n", r, t->left->Gentry->binding);
+            fprintf(targetFile, "MOV R%d, %d\n", r, t->left->Gentry->binding); // get address (binding) and store
             return r;
         }
         
