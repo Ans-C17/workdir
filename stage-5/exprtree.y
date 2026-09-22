@@ -71,6 +71,7 @@ int nextFunctionLabel = 0;
 %left LT GT LE GE // conventionally equality operators lower precedence than relation operators
 %left PLUS MINUS
 %left MUL DIV MOD
+%right UMINUS
 
 %start Program
 
@@ -485,6 +486,9 @@ E : E PLUS E {
     }
     | E MOD E {
         $$ = makeOperatorNode("%", $1, $3);
+    }
+    | MINUS E %prec UMINUS {
+        $$ = makeOperatorNode("-", makeNumNode(0), $2);
     }
     | '(' E ')' {
         $$ = $2;

@@ -9,7 +9,7 @@ void yyerror(const char* s);
 
 %%
 
--?[0-9]+ {    
+[0-9]+ {    
     yylval.num = atoi(yytext);
     return NUM;
 }

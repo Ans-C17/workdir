@@ -1,5 +1,6 @@
 decl
-  int n,arr[10],i,j,dup, BubbleSort(int first, int last);
+  int n,arr[10],i,j,dup;
+  int BubbleSort(int first, int last);
 enddecl
 
 int BubbleSort(int first, int last)

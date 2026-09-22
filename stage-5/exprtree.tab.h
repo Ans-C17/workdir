@@ -88,7 +88,8 @@ extern int yydebug;
     UNTIL = 294,
     BREAK = 295,
     CONTINUE = 296,
-    STRING = 297
+    STRING = 297,
+    UMINUS = 298
   };
 #endif
 
@@ -104,7 +105,7 @@ union YYSTYPE
     VarList* varlist;
     Paramstruct* paramlist;
 
-#line 108 "exprtree.tab.h"
+#line 109 "exprtree.tab.h"
 
 };
 typedef union YYSTYPE YYSTYPE;
