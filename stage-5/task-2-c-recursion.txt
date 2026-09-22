@@ -1,0 +1,24 @@
+decl
+    int fact(int n);
+enddecl
+
+int fact(int n)
+{
+    decl
+    enddecl
+
+    begin
+        return fact(n - 1);
+    end
+}
+
+int main()
+{
+    decl
+    enddecl
+
+    begin
+        write(fact(5));
+        return 0;
+    end
+}

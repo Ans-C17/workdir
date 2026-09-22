@@ -34,7 +34,7 @@ int nextFunctionLabel = 0;
 // these guys dont return a semantic value
 // oru if kanda u know its an if, ok, but oru num kanda u need the value of the num, hence <num> exists
 %token PLUS MINUS MUL DIV MOD
-%token LT GT LE GE EQ NE
+%token LT GT LE GE EQ NE OR AND
 
 %token ADDRESS
 
@@ -42,6 +42,7 @@ int nextFunctionLabel = 0;
 %token DECL ENDDECL
 %token INT STR
 %token ASSIGN SEMICOLON
+%token MAIN RETURN
 
 %token READ WRITE
 %token IF THEN ELSE ENDIF
@@ -53,7 +54,7 @@ int nextFunctionLabel = 0;
 // 1. terminal -> %TOKEN (with or without semantic value, declaration required)
 // 2. non terminal -> %TYPE (not required if no semantic value)
 
-%type <node> Program MainBlock Slist Stmt InputStmt OutputStmt AsgStmt E Variable
+%type <node> Program MainBlock Body ReturnStmt ArgList Slist Stmt InputStmt OutputStmt AsgStmt E Variable
 %type <node> IfStmt WhileStmt
 %type <node> BreakStmt ContinueStmt
 %type <node> RepeatStmt DoWhileStmt
@@ -64,6 +65,8 @@ int nextFunctionLabel = 0;
 %type <paramlist> ParamList
 %type <paramlist> Param
 
+%left OR
+%left AND
 %left EQ NE // a + 5 < b * 2 -> (a + 5) < (b * 2) => arithmetic before comparison
 %left LT GT LE GE // conventionally equality operators lower precedence than relation operators
 %left PLUS MINUS
@@ -278,7 +281,12 @@ FDefBlock : FDefBlock FDef | FDef;
 
 FDef : Type ID'('ParamList')' {
         CheckFunctionDefinition($2, $1, $4);
-    } '{' LdeclBlock Slist '}';
+        BeginFunctionScope($4);
+    } '{' LdeclBlock Body '}' {
+        SaveFunctionAST($2, finalizeBodyNode($9, $1, $2), 0);
+        PrintLocalSymbolTable($2);
+        EndFunctionScope();
+    };
 
 ParamList : ParamList ',' Param {
         Paramstruct *temp = $1;
@@ -311,7 +319,9 @@ LdeclBlock : DECL LDecList ENDDECL | DECL ENDDECL;
 
 LDecList : LDecList LDecl | LDecl;
 
-LDecl : Type IdList SEMICOLON;
+LDecl : Type IdList SEMICOLON {
+        InstallLocalVariables($2, $1);
+    };
 
 IdList : IdList ',' ID {
         VarList* newNode = calloc(1, sizeof(VarList));
@@ -345,14 +355,34 @@ IdList : IdList ',' ID {
         $$ = newNode;
     };
 
-// for E: ID() | ID(Arglist) below
-ArgList : ArgList ',' E | E;
+// Each argument-list node holds one expression in left and the next argument in right.
+ArgList : ArgList ',' E { $$ = appendArgNode($1, $3); }
+        | E             { $$ = makeArgListNode($1); };
 
-MainBlock : T_BEGIN Slist T_END SEMICOLON {
+/* A function body must end with exactly one return statement. */
+Body : T_BEGIN Slist ReturnStmt T_END { $$ = makeBodyNode($2, $3); }
+     | T_BEGIN ReturnStmt T_END       { $$ = makeBodyNode(NULL, $2); };
+
+ReturnStmt : RETURN E SEMICOLON { $$ = makeReturnNode($2); };
+
+/* main is a function with no parameters and an int return type. */
+MainBlock : INT MAIN '(' ')' '{' {
+        BeginFunctionScope(NULL);
+    } LdeclBlock Body '}' {
+        root = finalizeBodyNode($8, TYPE_INT, "main");
+        SaveFunctionAST("main", root, 1);
+        PrintLocalSymbolTable("main");
+        EndFunctionScope();
+        $$ = NULL;
+    }
+    /* Stage 4 form retained so existing non-function test programs still parse. */
+    | T_BEGIN Slist T_END SEMICOLON {
         root = $2;
+        $$ = $2;
     } 
     | T_BEGIN T_END SEMICOLON {
         root = NULL; // no syntax tree as T_BEGIN & T_END are non-terminals
+        $$ = NULL;
     };
 
 // so Slist is not storing the source text
@@ -477,6 +507,12 @@ E : E PLUS E {
     | E NE E {
         $$ = makeOperatorNode("!=", $1, $3);
     }
+    | E OR E {
+        $$ = makeOperatorNode("||", $1, $3);
+    }
+    | E AND E {
+        $$ = makeOperatorNode("&&", $1, $3);
+    }
     | NUM {
         $$ = makeNumNode($1);
     }
@@ -490,12 +526,10 @@ E : E PLUS E {
         $$ = $1;
     }
     | ID'('')' {
-        /* Function-call AST construction belongs to Task 2. */
-        $$ = NULL;
+        $$ = makeFunctionCallNode($1, NULL);
     }
     | ID'('ArgList')' {
-        /* Function-call AST construction belongs to Task 2. */
-        $$ = NULL;
+        $$ = makeFunctionCallNode($1, $3);
     };
 
 %%

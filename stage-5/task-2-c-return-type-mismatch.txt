@@ -1,0 +1,23 @@
+decl
+    int getValue();
+enddecl
+
+int getValue()
+{
+    decl
+    enddecl
+
+    begin
+        return "hello";
+    end
+}
+
+int main()
+{
+    decl
+    enddecl
+
+    begin
+        return 0;
+    end
+}

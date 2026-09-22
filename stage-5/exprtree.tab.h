@@ -62,29 +62,33 @@ extern int yydebug;
     GE = 268,
     EQ = 269,
     NE = 270,
-    ADDRESS = 271,
-    T_BEGIN = 272,
-    T_END = 273,
-    DECL = 274,
-    ENDDECL = 275,
-    INT = 276,
-    STR = 277,
-    ASSIGN = 278,
-    SEMICOLON = 279,
-    READ = 280,
-    WRITE = 281,
-    IF = 282,
-    THEN = 283,
-    ELSE = 284,
-    ENDIF = 285,
-    WHILE = 286,
-    DO = 287,
-    ENDWHILE = 288,
-    REPEAT = 289,
-    UNTIL = 290,
-    BREAK = 291,
-    CONTINUE = 292,
-    STRING = 293
+    OR = 271,
+    AND = 272,
+    ADDRESS = 273,
+    T_BEGIN = 274,
+    T_END = 275,
+    DECL = 276,
+    ENDDECL = 277,
+    INT = 278,
+    STR = 279,
+    ASSIGN = 280,
+    SEMICOLON = 281,
+    MAIN = 282,
+    RETURN = 283,
+    READ = 284,
+    WRITE = 285,
+    IF = 286,
+    THEN = 287,
+    ELSE = 288,
+    ENDIF = 289,
+    WHILE = 290,
+    DO = 291,
+    ENDWHILE = 292,
+    REPEAT = 293,
+    UNTIL = 294,
+    BREAK = 295,
+    CONTINUE = 296,
+    STRING = 297
   };
 #endif
 
@@ -100,7 +104,7 @@ union YYSTYPE
     VarList* varlist;
     Paramstruct* paramlist;
 
-#line 104 "exprtree.tab.h"
+#line 108 "exprtree.tab.h"
 
 };
 typedef union YYSTYPE YYSTYPE;

@@ -1,0 +1,30 @@
+decl
+    int x;
+    int anschristykl;
+    int add(int a, int b);
+enddecl
+
+int add(int a, int b)
+{
+    decl
+        int x;
+    enddecl
+
+    begin
+        x = a + b;
+        write(x);
+        return x;
+    end
+}
+
+int main()
+{
+    decl
+    enddecl
+
+    begin
+        x = 10;
+        write(x);
+        return 0;
+    end
+}

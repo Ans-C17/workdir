@@ -29,7 +29,14 @@ enum {
     NODE_BREAK,
     NODE_CONTINUE,
     NODE_REPEAT,
-    NODE_DOWHILE
+    NODE_DOWHILE,
+    NODE_RETURN,
+    NODE_BODY,
+    NODE_FUNCTION,
+    NODE_MAIN,
+    NODE_ARG_LIST,
+    NODE_OR,
+    NODE_AND
 };
 
 enum {
@@ -70,14 +77,31 @@ typedef struct Gsymbol {
     struct Gsymbol* next;
 } Gsymbol;
 
+typedef struct Lsymbol {
+    char *name;
+    int type;
+    int binding;
+    struct Lsymbol *next;
+} Lsymbol;
+
 typedef struct tnode {
 	int type; // type of variable - INT, BOOL for now
 	int val; // value of a number for NUM nodes - 5, 10
 	char* varname; // name of a variable for ID nodes - a,b,...,z
-	int nodetype; // information about non-leaf nodes - read/write/connector/+/* etc
+    int nodetype; // information about non-leaf nodes - read/write/connector/+/* etc
     Gsymbol* Gentry; // pointer to corresponding GST entry
-	struct tnode *left, *middle, *right; 
+    Lsymbol* Lentry; // pointer to corresponding local-symbol-table entry
+    struct tnode *arglist; // expressions passed to a function call
+    struct tnode *left, *middle, *right;
 } tnode;
+
+typedef struct FunctionAST {
+    char *name;
+    tnode *tree;
+    struct FunctionAST *next;
+} FunctionAST;
+
+extern FunctionAST *FunctionASTHead;
 
 tnode* createTree(int val, int type, int nodetype, char* varname, tnode* l, tnode* m, tnode* r);
 
@@ -99,6 +123,13 @@ tnode* makeContinueNode();
 
 tnode* makeRepeatNode(tnode* body, tnode* cond);
 tnode* makeDoWhileNode(tnode* body, tnode* cond);
+tnode* makeReturnNode(tnode *expr);
+tnode* makeBodyNode(tnode *statements, tnode *returnNode);
+tnode* finalizeBodyNode(tnode *body, int returnType, char *functionName);
+tnode* makeFunctionCallNode(char *name, tnode *arglist);
+tnode* makeArgListNode(tnode *expr);
+tnode* appendArgNode(tnode *arglist, tnode *expr);
+void SaveFunctionAST(char *name, tnode *body, int isMain);
 
 tnode* makeArrayNode(char* name, tnode* index); // for accessing array elements
 tnode* makeArray2DNode(char *name, tnode *rowIndex, tnode *colIndex);
@@ -109,6 +140,11 @@ tnode* makeDereferenceNode(tnode *ptr); // creates an AST node for dereferencing
 struct Gsymbol* Lookup(char* name);
 void Install(char* name, int type, int size, int rows, int cols, Paramstruct *paramlist, int flabel); // add new var to symbol table    
 void CheckFunctionDefinition(char *name, int returnType, Paramstruct *paramlist);
+Lsymbol *LLookup(char *name);
+void BeginFunctionScope(Paramstruct *paramlist);
+void InstallLocalVariables(VarList *varlist, int type);
+void EndFunctionScope(void);
+void PrintLocalSymbolTable(char *functionName);
 void PrintSymbolTable();
 
 #endif

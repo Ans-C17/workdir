@@ -4,7 +4,12 @@
 #include <string.h>
 
 Gsymbol* Ghead = NULL;
+Lsymbol* Lhead = NULL;
 int nextBinding = 4096;
+int nextLocalBinding = 1;
+
+FunctionAST *FunctionASTHead = NULL;
+static FunctionAST *functionASTTail = NULL;
 
 Gsymbol* Lookup(char *name) { // searches the symbol table and returns the address of the matching symbol-table entry
     Gsymbol* temp = Ghead;
@@ -99,38 +104,147 @@ void CheckFunctionDefinition(char *name, int returnType, Paramstruct *paramlist)
     }
 }
 
-void PrintSymbolTable() {
-    Gsymbol *temp = Ghead;
-    printf("Name\tType\tSize\tBinding\tParameters\tFunction label\n");
+Lsymbol *LLookup(char *name) {
+    Lsymbol *temp = Lhead;
 
     while (temp != NULL) {
-        printf("%s\t", temp->name);
-        if (temp->type == TYPE_INT)
-            printf("INT\t");
-        else if (temp->type == TYPE_STR)
-            printf("STR\t");
-        else if (temp->type == TYPE_INT_PTR)
-            printf("INT_PTR\t");
-        else if (temp->type == TYPE_STR_PTR)
-            printf("STR_PTR\t");
+        if (strcmp(temp->name, name) == 0) {
+            return temp;
+        }
+        temp = temp->next;
+    }
+    return NULL;
+}
 
-        printf("%d\t", temp->size);
+/* Lsymbol table
+
+a      INT    -3    ← parameter
+b      INT    -4    ← parameter
+x      INT     1    ← local
+msg    STR     2    ← local */
+
+static void LInstall(char *name, int type, int binding) {
+    Lsymbol *entry;
+    Lsymbol *temp;
+
+    if (LLookup(name) != NULL) {
+        fprintf(stderr, "Error: local symbol '%s' is already declared in this function\n", name);
+        exit(1);
+    }
+
+    entry = calloc(1, sizeof(Lsymbol));
+    entry->name = strdup(name);
+    entry->type = type;
+    entry->binding = binding;
+
+    if (Lhead == NULL) {
+        Lhead = entry;
+        return;
+    }
+
+    temp = Lhead;
+    while (temp->next != NULL) {
+        temp = temp->next;
+    }
+    temp->next = entry;
+}
+
+/* Parameters are below BP; locals are above BP in the activation record. */
+void BeginFunctionScope(Paramstruct *paramlist) {
+    int parameterBinding = -3;
+
+    Lhead = NULL;
+    nextLocalBinding = 1;
+    while (paramlist != NULL) {
+        LInstall(paramlist->name, paramlist->type, parameterBinding--);
+        paramlist = paramlist->next;
+    }
+}
+
+void InstallLocalVariables(VarList *varlist, int type) {
+    while (varlist != NULL) {
+        LInstall(varlist->name, type, nextLocalBinding++);
+        varlist = varlist->next;
+    }
+}
+
+void EndFunctionScope(void) {
+    /* The AST nodes retain their Lsymbol pointers; later stages free them after codegen. */
+    Lhead = NULL;
+}
+
+void SaveFunctionAST(char *name, tnode *body, int isMain) {
+    FunctionAST *entry = calloc(1, sizeof(FunctionAST));
+    tnode *tree = body;
+
+    if (isMain) {
+        tree = createTree(0, TYPE_INT, NODE_MAIN, name, body, NULL, NULL);
+    }
+
+    entry->name = strdup(name);
+    entry->tree = tree;
+    if (FunctionASTHead == NULL) {
+        FunctionASTHead = entry;
+    } else {
+        functionASTTail->next = entry;
+    }
+    functionASTTail = entry;
+}
+
+static const char *TypeName(int type) {
+    switch (type) {
+        case TYPE_INT: return "INT";
+        case TYPE_STR: return "STR";
+        case TYPE_INT_PTR: return "INT_PTR";
+        case TYPE_STR_PTR: return "STR_PTR";
+        case TYPE_BOOL: return "BOOL";
+        default: return "?";
+    }
+}
+
+static void PrintTableHeader(void) {
+    printf("%-16s %-10s %-8s %-10s %-24s %-14s\n",
+           "Name", "Type", "Size", "Binding", "Parameters", "Function label");
+}
+
+void PrintLocalSymbolTable(char *functionName) {
+    Lsymbol *temp = Lhead;
+
+    printf("\nLocal Symbol Table: %s\n", functionName);
+    PrintTableHeader();
+    while (temp != NULL) {
+        printf("%-16s %-10s %-8s %-10d %-24s %-14s\n",
+               temp->name, TypeName(temp->type), "-", temp->binding, "-", "-");
+        temp = temp->next;
+    }
+}
+
+void PrintSymbolTable() {
+    Gsymbol *temp = Ghead;
+    printf("\nGlobal Symbol Table\n");
+    PrintTableHeader();
+
+    while (temp != NULL) {
         if (temp->flabel == -1) {
-            printf("%d\t-\t-\n", temp->binding);
+            printf("%-16s %-10s %-8d %-10d %-24s %-14s\n",
+                   temp->name, TypeName(temp->type), temp->size, temp->binding, "-", "-");
         } else {
             Paramstruct *param = temp->paramlist;
-            printf("-\t");
+            char parameters[256] = "";
             if (param == NULL) {
-                printf("(none)\t");
+                strcpy(parameters, "(none)");
             } else {
                 while (param != NULL) {
-                    printf("%s %s%s", param->type == TYPE_INT ? "int" : "str",
-                           param->name, param->next == NULL ? "" : ", ");
+                    size_t used = strlen(parameters);
+                    snprintf(parameters + used, sizeof(parameters) - used, "%s%s %s",
+                             used == 0 ? "" : ", ", TypeName(param->type), param->name);
                     param = param->next;
                 }
-                printf("\t");
             }
-            printf("F%d\n", temp->flabel);
+            char label[16];
+            snprintf(label, sizeof(label), "F%d", temp->flabel);
+            printf("%-16s %-10s %-8s %-10s %-24s %-14s\n",
+                   temp->name, TypeName(temp->type), "-", "-", parameters, label);
         }
 
         temp = temp->next;
@@ -145,9 +259,9 @@ tnode* makeAddressNode(tnode *var) { // creates an AST node for the address-of o
 
     int pointerType;
 
-    if (var->Gentry->type == TYPE_INT)
+    if (var->type == TYPE_INT)
         pointerType = TYPE_INT_PTR;
-    else if (var->Gentry->type == TYPE_STR)
+    else if (var->type == TYPE_STR)
         pointerType = TYPE_STR_PTR;
     else {
         fprintf(stderr, "Cannot take address of a pointer\n");
@@ -180,6 +294,8 @@ tnode* createTree(int val, int type, int nodetype, char* varname, tnode* l, tnod
     temp->nodetype = nodetype;
     temp->varname = varname;
     temp->Gentry = NULL;
+    temp->Lentry = NULL;
+    temp->arglist = NULL;
     temp->left = l;
     temp->middle = m;
     temp->right = r;
@@ -243,12 +359,31 @@ tnode* makeOperatorNode(char* op, tnode* l, tnode* r) {
         nodetype = NODE_EQ;
         type = TYPE_BOOL;
     }
+    else if (strcmp(op, "||") == 0) {
+        nodetype = NODE_OR;
+        type = TYPE_BOOL;
+    }
+    else if (strcmp(op, "&&") == 0) {
+        nodetype = NODE_AND;
+        type = TYPE_BOOL;
+    }
     else {
         fprintf(stderr, "Invalid operator %s\n", op);
         exit(1);
     }
 
-    if (l->type != TYPE_INT || r->type != TYPE_INT) { // left and right operands should both be strictly int 
+    if ((nodetype == NODE_OR || nodetype == NODE_AND) &&
+        (l->type != TYPE_BOOL || r->type != TYPE_BOOL)) {
+        fprintf(stderr, "Type mismatch\n");
+        exit(1);
+    }
+    if ((nodetype == NODE_EQ || nodetype == NODE_NE) && l->type != r->type) {
+        fprintf(stderr, "Type mismatch\n");
+        exit(1);
+    }
+    if (nodetype != NODE_EQ && nodetype != NODE_NE &&
+        nodetype != NODE_OR && nodetype != NODE_AND &&
+        (l->type != TYPE_INT || r->type != TYPE_INT)) {
         fprintf(stderr, "Type mismatch\n");
         exit(1);
     }
@@ -257,16 +392,29 @@ tnode* makeOperatorNode(char* op, tnode* l, tnode* r) {
 }
 
 tnode* makeIdNode(char* name) {
-    // 1. check if the var is declared, look into symbol table
-    Gsymbol* entry = Lookup(name);
-    if (entry == NULL) {
+    Lsymbol *localEntry = LLookup(name);
+    Gsymbol *globalEntry;
+    tnode *node;
+
+    /* Local scope takes precedence over a global declaration of the same name. */
+    if (localEntry != NULL) {
+        node = createTree(0, localEntry->type, NODE_ID, name, NULL, NULL, NULL);
+        node->Lentry = localEntry;
+        return node;
+    }
+
+    globalEntry = Lookup(name);
+    if (globalEntry == NULL) {
         printf("Error: Variable %s not declared\n", name);
         exit(1);
     }
+    if (globalEntry->flabel != -1) {
+        fprintf(stderr, "Error: '%s' is a function; call it with parentheses\n", name);
+        exit(1);
+    }
 
-    // 2. make the ast node of it, and make the node point to the gst entry
-    tnode* node = createTree(0, entry->type, NODE_ID, name, NULL, NULL, NULL);
-    node->Gentry = entry;
+    node = createTree(0, globalEntry->type, NODE_ID, name, NULL, NULL, NULL);
+    node->Gentry = globalEntry;
     return node;
 }
 
@@ -327,6 +475,82 @@ tnode* makeDoWhileNode(tnode* body, tnode* cond) {
     return createTree(0, TYPE_BOOL, NODE_DOWHILE, NULL, cond, NULL, body);
 }
 
+tnode* makeReturnNode(tnode *expr) {
+    if (expr->type != TYPE_INT && expr->type != TYPE_STR) {
+        fprintf(stderr, "Error: a function can return only an int or str expression\n");
+        exit(1);
+    }
+    return createTree(0, expr->type, NODE_RETURN, NULL, expr, NULL, NULL);
+}
+
+tnode* makeBodyNode(tnode *statements, tnode *returnNode) {
+    return createTree(0, returnNode->type, NODE_BODY, NULL,
+                      statements, NULL, returnNode);
+}
+
+tnode* finalizeBodyNode(tnode *body, int returnType, char *functionName) {
+    if (body->type != returnType) {
+        fprintf(stderr, "Error: return type of function '%s' does not match its declaration\n",
+                functionName);
+        exit(1);
+    }
+    return body;
+}
+
+tnode* makeArgListNode(tnode *expr) {
+    return createTree(0, expr->type, NODE_ARG_LIST, NULL, expr, NULL, NULL);
+}
+
+tnode* appendArgNode(tnode *arglist, tnode *expr) {
+    tnode *tail = arglist;
+    tnode *newArg = makeArgListNode(expr);
+
+    while (tail->right != NULL) {
+        tail = tail->right;
+    }
+    tail->right = newArg;
+    return arglist;
+}
+
+tnode* makeFunctionCallNode(char *name, tnode *arglist) {
+    Gsymbol *function = Lookup(name);
+    Paramstruct *formal;
+    tnode *actual;
+    int position = 1;
+    tnode *node;
+
+    if (function == NULL) {
+        fprintf(stderr, "Error: function '%s' is not declared\n", name);
+        exit(1);
+    }
+    if (function->flabel == -1) {
+        fprintf(stderr, "Error: '%s' is a variable, not a function\n", name);
+        exit(1);
+    }
+
+    formal = function->paramlist;
+    actual = arglist;
+    while (formal != NULL && actual != NULL) {
+        if (formal->type != actual->left->type) {
+            fprintf(stderr, "Error: argument %d of '%s' has the wrong type\n",
+                    position, name);
+            exit(1);
+        }
+        formal = formal->next;
+        actual = actual->right;
+        position++;
+    }
+    if (formal != NULL || actual != NULL) {
+        fprintf(stderr, "Error: argument count of '%s' does not match its declaration\n", name);
+        exit(1);
+    }
+
+    node = createTree(0, function->type, NODE_FUNCTION, name, NULL, NULL, NULL);
+    node->Gentry = function;
+    node->arglist = arglist;
+    return node;
+}
+
 // for an array with 3 elements, the ast looks like this
 //                   CONNECTOR
 //               /            \
@@ -339,6 +563,10 @@ tnode* makeDoWhileNode(tnode* body, tnode* cond) {
 //    NUM(0)       NUM(1)
 
 tnode* makeArrayNode(char* name, tnode* index) { // index is an expression E 
+    if (LLookup(name) != NULL) {
+        fprintf(stderr, "Error: local variable '%s' is not an array\n", name);
+        exit(1);
+    }
     struct Gsymbol* entry = Lookup(name);
 
     if (entry == NULL) {
@@ -366,6 +594,10 @@ tnode* makeArrayNode(char* name, tnode* index) { // index is an expression E
 }
 
 tnode* makeArray2DNode(char *name, tnode *rowIndex, tnode *colIndex) {
+	if (LLookup(name) != NULL) {
+		fprintf(stderr, "Error: local variable '%s' is not an array\n", name);
+		exit(1);
+	}
 	struct Gsymbol *entry = Lookup(name);
 
 	if (entry == NULL) {

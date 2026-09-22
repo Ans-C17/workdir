@@ -38,11 +38,15 @@ void yyerror(const char* s);
 ">" { return GT; }
 "==" { return EQ; }
 "!=" { return NE; }
+"||" { return OR; }
+"&&" { return AND; }
 
 [ \t\r\n] { } // a space before them to say space is also ignored
 
 "begin" { return T_BEGIN; }
 "end" { return T_END; }
+"main" { return MAIN; }
+"return" { return RETURN; }
 
 "decl" { return DECL; }
 "enddecl" { return ENDDECL; }
