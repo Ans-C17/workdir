@@ -1,0 +1,10 @@
+decl
+    int x, y;
+    str msg;
+    int add(int a, int b);
+    str get();
+enddecl
+
+begin
+    x = 10;
+end;
