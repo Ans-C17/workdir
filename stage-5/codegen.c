@@ -2,434 +2,387 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-extern FILE* targetFile;
+extern FILE *targetFile;
+
 int reg = -1;
 int label = 0;
 
-#define MAX_LOOP_DEPTH 100 // nested loops require stack
-int loopTop = -1; // innermost loop
-int loopBreak[MAX_LOOP_DEPTH];
-int loopContinue[MAX_LOOP_DEPTH];
+#define MAX_LOOP_DEPTH 100
 
-int getReg() {
-    if (reg >= 19) {
-        printf("Out of registers\n");
+static int loopTop = -1;
+static int loopBreak[MAX_LOOP_DEPTH];
+static int loopContinue[MAX_LOOP_DEPTH];
+static int generatingMain;
+static int currentLocalCount;
+
+/* R19 is reserved for library-call scratch values. */
+int getReg(void) {
+    if (reg >= 18) {
+        fprintf(stderr, "Out of registers\n");
         exit(1);
     }
-
-    reg++;
-    return reg;
+    return ++reg;
 }
 
-int getLabel() {
-    return label++; // post-increment
-}
-
-void freeReg() {
-    if (reg >= 0) reg--;
-}
-
-void pushLoop(int breakLabel, int continueLabel) {
-    if (loopTop >= MAX_LOOP_DEPTH - 1) {
-        printf("Too many nested loops\n");
-        exit(1);
+void freeReg(void) {
+    if (reg >= 0) {
+        --reg;
     }
+}
 
-    loopTop++;
+int getLabel(void) {
+    return label++;
+}
 
-    // push to stacks
-    loopBreak[loopTop] = breakLabel;
+static void pushLoop(int breakLabel, int continueLabel) {
+    loopBreak[++loopTop] = breakLabel;
     loopContinue[loopTop] = continueLabel;
 }
 
-void popLoop() {
-    if (loopTop >= 0) loopTop--;
+static void popLoop(void) {
+    --loopTop;
 }
 
-int getArrayAddress(tnode *t) { // computes and returns the register containing the address of an array element
-    int indexReg = codeGen(t->left); // compute the index, it can be like arr[5] or arr[4 * 9]; store the result and return reg
-    int baseReg = getReg(); // after like indexReg stores value, like R1 = 7, baseReg stores like 4059 (arr start addr)
+/* An Lentry uses BP-relative storage; otherwise the variable is global. */
+static int idAddress(tnode *t) {
+    int addressReg = getReg();
+
+    if (t->Lentry != NULL) {
+        fprintf(targetFile, "MOV R%d, BP\n", addressReg);
+        fprintf(targetFile, "ADD R%d, %d\n", addressReg, t->Lentry->binding);
+    } else {
+        fprintf(targetFile, "MOV R%d, %d\n", addressReg, t->Gentry->binding);
+    }
+    return addressReg;
+}
+
+static int arrayAddress(tnode *t) {
+    int indexReg = codeGen(t->left);
+    int baseReg = getReg();
 
     fprintf(targetFile, "MOV R%d, %d\n", baseReg, t->Gentry->binding);
-    fprintf(targetFile, "ADD R%d, R%d\n", indexReg, baseReg); // arr[i] = arr_start_addr + i, i.e baseReg + indexReg
-
+    fprintf(targetFile, "ADD R%d, R%d\n", indexReg, baseReg);
     freeReg();
     return indexReg;
 }
 
-int getArray2DAddress(tnode *t) {
-	int rowReg = codeGen(t->left);
-	int colReg = codeGen(t->middle);
-	int baseReg = getReg(); 
-	int colsReg = getReg();
+static int array2Address(tnode *t) {
+    int rowReg = codeGen(t->left);
+    int colReg = codeGen(t->middle);
+    int baseReg = getReg();
+    int colsReg = getReg();
 
-    // address(arr[i][j]) = base + (i × number_of_columns) + j
+    fprintf(targetFile, "MOV R%d, %d\n", baseReg, t->Gentry->binding);
+    fprintf(targetFile, "MOV R%d, %d\n", colsReg, t->Gentry->cols);
+    fprintf(targetFile, "MUL R%d, R%d\n", rowReg, colsReg);
+    fprintf(targetFile, "ADD R%d, R%d\n", rowReg, colReg);
+    fprintf(targetFile, "ADD R%d, R%d\n", rowReg, baseReg);
 
-	fprintf(targetFile, "MOV R%d, %d\n", baseReg, t->Gentry->binding);
-	fprintf(targetFile, "MOV R%d, %d\n", colsReg, t->Gentry->cols); // set colsReg = number of cols
-	fprintf(targetFile, "MUL R%d, R%d\n", rowReg, colsReg); // i * no_of_cols
-	fprintf(targetFile, "ADD R%d, R%d\n", rowReg, colReg); // + col_index
-	fprintf(targetFile, "ADD R%d, R%d\n", rowReg, baseReg); // base + 
-
-	freeReg();
-	freeReg();
-	freeReg();
-
-	return rowReg;
+    freeReg();
+    freeReg();
+    freeReg();
+    return rowReg;
 }
 
-int codeGen(tnode* t) {
-    if (t == NULL)
-        return -1;
+static void emitExit(void) {
+    fprintf(targetFile, "MOV R19, \"Exit\"\n");
+    fprintf(targetFile, "PUSH R19\nPUSH R19\nPUSH R19\nPUSH R19\nPUSH R19\n");
+    fprintf(targetFile, "CALL 0\n");
+}
 
-    switch (t->nodetype) {
-        case NODE_NUM: {
-            int r = getReg();
-            fprintf(targetFile, "MOV R%d, %d\n", r, t->val);
-            return r;
-        }
+static void emitRead(tnode *variable) {
+    int addressReg;
 
-        case NODE_STR: {
-            int r = getReg();
-            fprintf(targetFile, "MOV R%d, \"%s\"\n", r, t->varname);
-            return r;
-        }
-        
-        case NODE_ID: { // whenever stuff like d = a * 3 + b comes -> so we fetch values of them and stores it in reg
-            int r = getReg();
-            int addr = t->Gentry->binding;
-            fprintf(targetFile, "MOV R%d, [%d]\n", r, addr); // [5000] means fetch value from addr 5000
-            return r;
-        }
-
-        case NODE_ADDRESS: { // generates the address of a variable
-            int r = getReg();
-            fprintf(targetFile, "MOV R%d, %d\n", r, t->left->Gentry->binding); // get address (binding) and store
-            return r;
-        }
-        
-        case NODE_DEREFERENCE: { // gets the value stored at the address held by a pointer
-            int r = codeGen(t->left);
-            fprintf(targetFile, "MOV R%d, [R%d]\n", r, r);
-            return r;
-        }
-
-        case NODE_ARRAY: { // get the value stored at an array element
-            int addrReg = getArrayAddress(t); // given arr[2], find where it is located (not the value of it)
-            fprintf(targetFile, "MOV R%d, [R%d]\n", addrReg, addrReg); // get value stored at that addr
-            // i.e R1 = memory[R1] -> get value stored at R1's mem addr and  store to R1
-            return addrReg;
-        }
-
-        case NODE_ARRAY2D: {
-            int addrReg = getArray2DAddress(t);
-            fprintf(targetFile, "MOV R%d, [R%d]\n", addrReg, addrReg);
-            return addrReg;
-        }
-
-        // fall through - group all 4 ops together
-        case NODE_PLUS:
-        case NODE_MINUS:
-        case NODE_MUL:
-        case NODE_DIV: 
-        case NODE_MOD: { 
-            int leftReg = codeGen(t->left);
-            int rightReg = codeGen(t->right);
-
-            switch (t->nodetype) {
-                case NODE_PLUS:
-                    fprintf(targetFile, "ADD R%d, R%d\n", leftReg, rightReg);
-                    break;
-
-                case NODE_MINUS:
-                    fprintf(targetFile, "SUB R%d, R%d\n", leftReg, rightReg);
-                    break;
-
-                case NODE_MUL:
-                    fprintf(targetFile, "MUL R%d, R%d\n", leftReg, rightReg);
-                    break;
-
-                case NODE_DIV:
-                    fprintf(targetFile, "DIV R%d, R%d\n", leftReg, rightReg);
-                    break;
-
-                case NODE_MOD:
-                    fprintf(targetFile, "MOD R%d, R%d\n", leftReg, rightReg);
-                    break;
-            }
-
-            freeReg(); // free rightReg
-            return leftReg; // assembly stores result from rightReg into leftReg
-        }
-
-        case NODE_LT:
-        case NODE_GT:
-        case NODE_LE:
-        case NODE_GE:
-        case NODE_EQ:
-        case NODE_NE: {
-            int leftReg = codeGen(t->left);
-            int rightReg = codeGen(t->right);
-
-            switch (t->nodetype) {
-                case NODE_LT:
-                    fprintf(targetFile, "LT R%d, R%d\n", leftReg, rightReg);
-                    break;
-
-                case NODE_GT:
-                    fprintf(targetFile, "GT R%d, R%d\n", leftReg, rightReg);
-                    break;
-
-                case NODE_LE:
-                    fprintf(targetFile, "LE R%d, R%d\n", leftReg, rightReg);
-                    break;
-
-                case NODE_GE:
-                    fprintf(targetFile, "GE R%d, R%d\n", leftReg, rightReg);
-                    break;
-
-                case NODE_EQ:
-                    fprintf(targetFile, "EQ R%d, R%d\n", leftReg, rightReg);
-                    break;
-
-                case NODE_NE:
-                    fprintf(targetFile, "NE R%d, R%d\n", leftReg, rightReg);
-                    break;
-            }
-            
-            freeReg();
-            return leftReg;
-        }
-
-        case NODE_ASSIGN: {
-            int r = codeGen(t->right);
-            
-            if (t->left->nodetype == NODE_ID) {
-                int addr = t->left->Gentry->binding;
-                fprintf(targetFile, "MOV [%d], R%d\n", addr, r); // Overwrite the RAM box (4096 + i) with the VALUE currently sitting in Ri
-            } else if (t->left->nodetype == NODE_ARRAY) { // handle arr[i] = value
-                int addrReg = getArrayAddress(t->left);
-                fprintf(targetFile, "MOV [R%d], R%d\n", addrReg, r);
-                freeReg();
-            } else if (t->left->nodetype == NODE_ARRAY2D) {
-                int addrReg = getArray2DAddress(t->left);
-                fprintf(targetFile, "MOV [R%d], R%d\n", addrReg, r);
-                freeReg();
-            } else if (t->left->nodetype == NODE_DEREFERENCE) { // assigns a value through a pointer
-                int addrReg = codeGen(t->left->left);
-                fprintf(targetFile, "MOV [R%d], R%d\n", addrReg, r);
-                freeReg();
-            }
-
-            freeReg();
-            return -1;
-        }
-
-        case NODE_CONNECTOR: {
-            codeGen(t->left); // Goes left, runs read(a) (or_anything_else), prints its XSM assembly to the file.
-            codeGen(t->right); // u know
-            return -1;
-        }
-
-        // five elements of stack
-        // 1. function code
-        // 2. arg1
-        // 3. arg2
-        // 4. arg3
-        // 5. return value slot
-
-        case NODE_WRITE: {
-            int r = codeGen(t->left); 
-            // we take t->left coz write only has one child, that child is the 
-            // root of the entire subtree.. whether it be operator, node or id
-
-
-            // For Write, the ABI contract says:
-            // Arg1 = -2 (-2 = stdout)
-            // Arg2 = Buffer (here buffer means the reg that contains the value u wanna print)
-            // Arg3 = unused
-            // i.e take value from the buffer (reg) and print in stdout
-
-            fprintf(targetFile, "MOV R2, \"Write\"\n");
-            fprintf(targetFile, "PUSH R2\n");
-            fprintf(targetFile, "MOV R2, -2\n");
-            fprintf(targetFile, "PUSH R2\n");
-            fprintf(targetFile, "PUSH R%d\n", r);
-            fprintf(targetFile, "PUSH R2\n");
-            fprintf(targetFile, "PUSH R0\n");
-            fprintf(targetFile, "CALL 0\n");
-
-            // POP (return_value_reg + 3 arguments + function code)
-            fprintf(targetFile, "POP R0\n");
-            fprintf(targetFile, "POP R1\n");
-            fprintf(targetFile, "POP R1\n");
-            fprintf(targetFile, "POP R1\n");
-            fprintf(targetFile, "POP R1\n");
-
-            freeReg();
-
-            return -1;
-        }
-
-        case NODE_READ: {
-            // For Read, the ABI contract says:
-            // Arg1 = -1 (-1 = stdin)
-            // Arg2 = Buffer (here buffer means which reg to store the value into)
-            // Arg3 = unused
-            // i.e take value from stdin and store it in buffer
-
-            if (t->left->nodetype == NODE_ID) {
-                int addr = t->left->Gentry->binding;
-
-                fprintf(targetFile, "MOV R2, \"Read\"\n");
-                fprintf(targetFile, "PUSH R2\n");
-                fprintf(targetFile, "MOV R2, -1\n");
-                fprintf(targetFile, "PUSH R2\n");
-                fprintf(targetFile, "MOV R2, %d\n", addr);
-                fprintf(targetFile, "PUSH R2\n");
-                fprintf(targetFile, "PUSH R2\n");
-                fprintf(targetFile, "PUSH R0\n");
-                fprintf(targetFile, "CALL 0\n");
-            } 
-            else if (t->left->nodetype == NODE_ARRAY) {
-                int addrReg = getArrayAddress(t->left);
-
-                fprintf(targetFile, "MOV R2, \"Read\"\n");
-                fprintf(targetFile, "PUSH R2\n");
-                fprintf(targetFile, "MOV R2, -1\n");
-                fprintf(targetFile, "PUSH R2\n");
-                fprintf(targetFile, "PUSH R%d\n", addrReg);
-                fprintf(targetFile, "PUSH R2\n");
-                fprintf(targetFile, "PUSH R0\n");
-                fprintf(targetFile, "CALL 0\n");
-
-                freeReg();
-            } 
-            else if (t->left->nodetype == NODE_ARRAY2D) { // EX1: handle read(arr[i][j])
-                int addrReg = getArray2DAddress(t->left);
-
-                fprintf(targetFile, "MOV R2, \"Read\"\n");
-                fprintf(targetFile, "PUSH R2\n");
-                fprintf(targetFile, "MOV R2, -1\n");
-                fprintf(targetFile, "PUSH R2\n");
-                fprintf(targetFile, "PUSH R%d\n", addrReg);
-                fprintf(targetFile, "PUSH R2\n");
-                fprintf(targetFile, "PUSH R0\n");
-                fprintf(targetFile, "CALL 0\n");
-
-                freeReg();
-            }
-
-            // remove return value + 3 arguments + function code
-            fprintf(targetFile, "POP R0\n");
-            fprintf(targetFile, "POP R1\n");
-            fprintf(targetFile, "POP R1\n");
-            fprintf(targetFile, "POP R1\n");
-            fprintf(targetFile, "POP R1\n");
-            return -1;
-        }
-
-        case NODE_IF: {
-            int condReg = codeGen(t->left);
-            int labelElse = getLabel();
-            int labelEnd = getLabel();
-
-            fprintf(targetFile, "JZ R%d, L%d\n", condReg, labelElse);
-            freeReg();
-            
-            codeGen(t->middle); // if body
-            // if execute aaya, jump to end by skipping else
-            fprintf(targetFile, "JMP L%d\n", labelEnd);
-            
-            // same labelElse value 
-            fprintf(targetFile, "L%d:\n", labelElse);
-            if (t->right != NULL) codeGen(t->right); // else body
-
-            fprintf(targetFile, "L%d:\n", labelEnd);
-            return -1;
-        }
-
-        case NODE_WHILE: {
-            int labelStart = getLabel();
-            int labelEnd = getLabel();
-
-            pushLoop(labelEnd, labelStart); 
-            // break = leave and go to LabelEnd
-            // continue = start again so labelStart
-
-            fprintf(targetFile, "L%d:\n", labelStart);
-            int condReg = codeGen(t->left); // check true
-            fprintf(targetFile, "JZ R%d, L%d\n", condReg, labelEnd); // false aanel
-
-            freeReg();
-            codeGen(t->right); // body
-            fprintf(targetFile, "JMP L%d\n", labelStart); // loop
-
-            fprintf(targetFile, "L%d:\n", labelEnd); // next label heading
-            popLoop();
-            return -1;
-        }
-
-        case NODE_BREAK: {
-            if (loopTop >= 0) { // loopil aanel breakine work cheyicha mathi
-                fprintf(targetFile, "JMP L%d\n", loopBreak[loopTop]);
-            }
-
-            return -1;
-        }
-
-        case NODE_CONTINUE: {
-            if (loopTop >= 0) {
-                fprintf(targetFile, "JMP L%d\n", loopContinue[loopTop]);
-            }
-
-            return -1;
-        }
-
-        case NODE_REPEAT: {
-            int labelStart = getLabel();
-            int labelCondition = getLabel();
-            int labelEnd = getLabel();
-
-            // condition check is at the bottom not top
-            pushLoop(labelEnd, labelCondition);
-            fprintf(targetFile, "L%d:\n", labelStart);
-            codeGen(t->right);
-
-            // condition check
-            fprintf(targetFile, "L%d:\n", labelCondition);
-            int condReg = codeGen(t->left);
-
-            // repeat as long as condition is FALSE
-            fprintf(targetFile, "JZ R%d, L%d\n", condReg, labelStart);
-
-            freeReg();
-            fprintf(targetFile, "L%d:\n", labelEnd);
-            popLoop();
-            return -1;
-        }
-
-        case NODE_DOWHILE: {
-            int labelStart = getLabel();
-            int labelCondition = getLabel();
-            int labelEnd = getLabel();
-
-            pushLoop(labelEnd, labelCondition);
-            fprintf(targetFile, "L%d:\n", labelStart);
-
-            codeGen(t->right);
-
-            fprintf(targetFile, "L%d:\n", labelCondition);
-            int condReg = codeGen(t->left);
-
-            fprintf(targetFile, "JNZ R%d, L%d\n", condReg, labelStart);
-            freeReg();
-
-            fprintf(targetFile, "L%d:\n", labelEnd);
-            popLoop();
-            return -1;
-        }
+    if (variable->nodetype == NODE_ID) {
+        addressReg = idAddress(variable);
+    } else if (variable->nodetype == NODE_ARRAY) {
+        addressReg = arrayAddress(variable);
+    } else if (variable->nodetype == NODE_ARRAY2D) {
+        addressReg = array2Address(variable);
+    } else {
+        addressReg = codeGen(variable->left);
     }
 
+    fprintf(targetFile, "MOV R19, \"Read\"\nPUSH R19\n");
+    fprintf(targetFile, "MOV R19, -1\nPUSH R19\n");
+    fprintf(targetFile, "PUSH R%d\nPUSH R19\nPUSH R19\nCALL 0\n", addressReg);
+    fprintf(targetFile, "POP R19\nPOP R19\nPOP R19\nPOP R19\nPOP R19\n");
+    freeReg();
+}
+
+static void pushArgs(tnode *arguments) {
+    int valueReg;
+
+    if (arguments == NULL) {
+        return;
+    }
+
+    pushArgs(arguments->right);
+    valueReg = codeGen(arguments->left);
+    fprintf(targetFile, "PUSH R%d\n", valueReg);
+    freeReg();
+}
+
+static int argCount(tnode *arguments) {
+    int count = 0;
+
+    while (arguments != NULL) {
+        ++count;
+        arguments = arguments->right;
+    }
+    return count;
+}
+
+static int functionCall(tnode *t) {
+    int savedTop = reg;
+    int arguments = argCount(t->arglist);
+    int i;
+    int resultReg;
+
+    for (i = 0; i <= savedTop; ++i) {
+        fprintf(targetFile, "PUSH R%d\n", i);
+    }
+
+    pushArgs(t->arglist);
+    fprintf(targetFile, "PUSH R19\n");
+    fprintf(targetFile, "CALL F%d\n", t->Gentry->flabel);
+
+    resultReg = getReg();
+    fprintf(targetFile, "POP R%d\n", resultReg);
+    while (arguments-- > 0) {
+        /* Do not overwrite the returned value (which may be in R0). */
+        fprintf(targetFile, "POP R19\n");
+    }
+    for (i = savedTop; i >= 0; --i) {
+        fprintf(targetFile, "POP R%d\n", i);
+    }
+    return resultReg;
+}
+
+static void binary(tnode *t, const char *instruction) {
+    int leftReg = codeGen(t->left);
+    int rightReg = codeGen(t->right);
+
+    fprintf(targetFile, "%s R%d, R%d\n", instruction, leftReg, rightReg);
+    freeReg();
+}
+
+int codeGen(tnode *t) {
+    int resultReg;
+    int addressReg;
+    int labelOne;
+    int labelTwo;
+
+    if (t == NULL) {
+        return -1;
+    }
+
+    switch (t->nodetype) {
+    case NODE_NUM:
+        resultReg = getReg();
+        fprintf(targetFile, "MOV R%d, %d\n", resultReg, t->val);
+        return resultReg;
+
+    case NODE_STR:
+        resultReg = getReg();
+        fprintf(targetFile, "MOV R%d, \"%s\"\n", resultReg, t->varname);
+        return resultReg;
+
+    case NODE_ID:
+        resultReg = idAddress(t);
+        fprintf(targetFile, "MOV R%d, [R%d]\n", resultReg, resultReg);
+        return resultReg;
+
+    case NODE_ADDRESS:
+        return idAddress(t->left);
+
+    case NODE_DEREFERENCE:
+        resultReg = codeGen(t->left);
+        fprintf(targetFile, "MOV R%d, [R%d]\n", resultReg, resultReg);
+        return resultReg;
+
+    case NODE_ARRAY:
+        resultReg = arrayAddress(t);
+        fprintf(targetFile, "MOV R%d, [R%d]\n", resultReg, resultReg);
+        return resultReg;
+
+    case NODE_ARRAY2D:
+        resultReg = array2Address(t);
+        fprintf(targetFile, "MOV R%d, [R%d]\n", resultReg, resultReg);
+        return resultReg;
+
+    case NODE_PLUS: binary(t, "ADD"); return reg;
+    case NODE_MINUS: binary(t, "SUB"); return reg;
+    case NODE_MUL:
+    case NODE_AND: binary(t, "MUL"); return reg;
+    case NODE_DIV: binary(t, "DIV"); return reg;
+    case NODE_MOD: binary(t, "MOD"); return reg;
+    case NODE_LT: binary(t, "LT"); return reg;
+    case NODE_GT: binary(t, "GT"); return reg;
+    case NODE_LE: binary(t, "LE"); return reg;
+    case NODE_GE: binary(t, "GE"); return reg;
+    case NODE_EQ: binary(t, "EQ"); return reg;
+    case NODE_NE: binary(t, "NE"); return reg;
+
+    case NODE_OR:
+        labelOne = codeGen(t->left);
+        labelTwo = codeGen(t->right);
+        fprintf(targetFile, "ADD R%d, R%d\n", labelOne, labelTwo);
+        fprintf(targetFile, "MOV R%d, 0\n", labelTwo);
+        fprintf(targetFile, "NE R%d, R%d\n", labelOne, labelTwo);
+        freeReg();
+        return labelOne;
+
+    case NODE_FUNCTION:
+        return functionCall(t);
+
+    case NODE_ASSIGN:
+        resultReg = codeGen(t->right);
+        if (t->left->nodetype == NODE_ID) {
+            addressReg = idAddress(t->left);
+        } else if (t->left->nodetype == NODE_ARRAY) {
+            addressReg = arrayAddress(t->left);
+        } else if (t->left->nodetype == NODE_ARRAY2D) {
+            addressReg = array2Address(t->left);
+        } else {
+            addressReg = codeGen(t->left->left);
+        }
+        fprintf(targetFile, "MOV [R%d], R%d\n", addressReg, resultReg);
+        freeReg();
+        freeReg();
+        return -1;
+
+    case NODE_CONNECTOR:
+        codeGen(t->left);
+        codeGen(t->right);
+        return -1;
+
+    case NODE_READ:
+        emitRead(t->left);
+        return -1;
+
+    case NODE_WRITE:
+        resultReg = codeGen(t->left);
+        fprintf(targetFile, "MOV R19, \"Write\"\nPUSH R19\n");
+        fprintf(targetFile, "MOV R19, -2\nPUSH R19\n");
+        fprintf(targetFile, "PUSH R%d\nPUSH R19\nPUSH R19\nCALL 0\n", resultReg);
+        fprintf(targetFile, "POP R19\nPOP R19\nPOP R19\nPOP R19\nPOP R19\n");
+        freeReg();
+        return -1;
+
+    case NODE_IF:
+        resultReg = codeGen(t->left);
+        labelOne = getLabel();
+        labelTwo = getLabel();
+        fprintf(targetFile, "JZ R%d, L%d\n", resultReg, labelOne);
+        freeReg();
+        codeGen(t->middle);
+        fprintf(targetFile, "JMP L%d\nL%d:\n", labelTwo, labelOne);
+        codeGen(t->right);
+        fprintf(targetFile, "L%d:\n", labelTwo);
+        return -1;
+
+    case NODE_WHILE:
+        labelOne = getLabel();
+        labelTwo = getLabel();
+        pushLoop(labelTwo, labelOne);
+        fprintf(targetFile, "L%d:\n", labelOne);
+        resultReg = codeGen(t->left);
+        fprintf(targetFile, "JZ R%d, L%d\n", resultReg, labelTwo);
+        freeReg();
+        codeGen(t->right);
+        fprintf(targetFile, "JMP L%d\nL%d:\n", labelOne, labelTwo);
+        popLoop();
+        return -1;
+
+    case NODE_BREAK:
+        if (loopTop >= 0) fprintf(targetFile, "JMP L%d\n", loopBreak[loopTop]);
+        return -1;
+
+    case NODE_CONTINUE:
+        if (loopTop >= 0) fprintf(targetFile, "JMP L%d\n", loopContinue[loopTop]);
+        return -1;
+
+    case NODE_REPEAT:
+        labelOne = getLabel();
+        labelTwo = getLabel();
+        pushLoop(labelTwo, labelTwo);
+        fprintf(targetFile, "L%d:\n", labelOne);
+        codeGen(t->right);
+        fprintf(targetFile, "L%d:\n", labelTwo);
+        resultReg = codeGen(t->left);
+        fprintf(targetFile, "JZ R%d, L%d\n", resultReg, labelOne);
+        freeReg();
+        popLoop();
+        return -1;
+
+    case NODE_DOWHILE:
+        labelOne = getLabel();
+        labelTwo = getLabel();
+        pushLoop(labelTwo, labelTwo);
+        fprintf(targetFile, "L%d:\n", labelOne);
+        codeGen(t->right);
+        fprintf(targetFile, "L%d:\n", labelTwo);
+        resultReg = codeGen(t->left);
+        fprintf(targetFile, "JNZ R%d, L%d\n", resultReg, labelOne);
+        freeReg();
+        popLoop();
+        return -1;
+
+    case NODE_BODY:
+        codeGen(t->left);
+        return codeGen(t->right);
+
+    case NODE_RETURN:
+        resultReg = codeGen(t->left);
+        if (generatingMain) {
+            freeReg();
+            emitExit();
+            return -1;
+        }
+        addressReg = getReg();
+        fprintf(targetFile, "MOV R%d, BP\n", addressReg);
+        fprintf(targetFile, "SUB R%d, 2\n", addressReg);
+        fprintf(targetFile, "MOV [R%d], R%d\n", addressReg, resultReg);
+        freeReg();
+        freeReg();
+        while (currentLocalCount-- > 0) fprintf(targetFile, "POP R0\n");
+        fprintf(targetFile, "POP BP\nRET\n");
+        return -1;
+    }
     return -1;
+}
+
+static void prologue(int localCount) {
+    int i;
+
+    fprintf(targetFile, "PUSH BP\nMOV BP, SP\n");
+    for (i = 0; i < localCount; ++i) {
+        fprintf(targetFile, "PUSH R0\n");
+    }
+}
+
+void generateProgram(FunctionAST *functions) {
+    FunctionAST *function;
+
+    fprintf(targetFile, "0\n2056\n0\n0\n0\n0\n0\n0\n");
+    fprintf(targetFile, "MOV SP, %d\nJMP MAIN\n", nextBinding - 1);
+
+    for (function = functions; function != NULL; function = function->next) {
+        reg = -1;
+        loopTop = -1;
+        currentLocalCount = function->localCount;
+
+        if (function->tree->nodetype == NODE_MAIN) {
+            generatingMain = 1;
+            fprintf(targetFile, "MAIN:\n");
+            prologue(function->localCount);
+            codeGen(function->tree->left);
+        } else {
+            generatingMain = 0;
+            fprintf(targetFile, "F%d:\n", Lookup(function->name)->flabel);
+            prologue(function->localCount);
+            codeGen(function->tree);
+        }
+    }
 }

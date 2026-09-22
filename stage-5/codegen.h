@@ -8,5 +8,6 @@ void freeReg();
 int getLabel();
 
 int codeGen(tnode *root);
+void generateProgram(FunctionAST *functions);
 
 #endif

@@ -98,10 +98,13 @@ typedef struct tnode {
 typedef struct FunctionAST {
     char *name;
     tnode *tree;
+    Lsymbol *localTable;
+    int localCount;
     struct FunctionAST *next;
 } FunctionAST;
 
 extern FunctionAST *FunctionASTHead;
+extern int nextBinding;
 
 tnode* createTree(int val, int type, int nodetype, char* varname, tnode* l, tnode* m, tnode* r);
 

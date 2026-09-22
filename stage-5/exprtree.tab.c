@@ -2610,16 +2610,15 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    /* Stage 5, Task 1 stops after building the global symbol table. */
-    // yylex() reads things char by char -> tries to match to LEX rules for every char 
-    // when it finds a complete match -> it sets yytext to that value
-    // then yylval takes the yytext, returns the token required and sends it to parser
-    // i.e E : NUM { $$ : makeNode($1) } -> $1 is the value LEX put into yylval
-    // athayith, YACC recieves NUM, to match and $1 contains the value
-    // return tells YACC WHAT it received. yylval tells YACC the VALUE attached to it.
-    // bison writes yylval as a global variable so when it calls yylex, it can access it
-
     PrintSymbolTable();
+    targetFile = fopen("target.xsm", "w");
+    if (targetFile == NULL) {
+        fprintf(stderr, "Could not open target.xsm for writing\n");
+        fclose(yyin);
+        return 1;
+    }
+    generateProgram(FunctionASTHead);
+    fclose(targetFile);
     fclose(yyin);
     return 0;
 }

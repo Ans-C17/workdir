@@ -1,0 +1,27 @@
+decl
+    int square(int n);
+enddecl
+
+int square(int n) {
+    decl
+        int x;
+    enddecl
+
+    begin
+        x = n * n;
+        return x;
+    end
+}
+
+int main() {
+    decl
+        int a, result;
+    enddecl
+
+    begin
+        a = 5;
+        result = square(a);
+        write(result);
+        return 0;
+    end
+}

@@ -175,6 +175,7 @@ void EndFunctionScope(void) {
 
 void SaveFunctionAST(char *name, tnode *body, int isMain) {
     FunctionAST *entry = calloc(1, sizeof(FunctionAST));
+    Lsymbol *local = Lhead;
     tnode *tree = body;
 
     if (isMain) {
@@ -183,6 +184,13 @@ void SaveFunctionAST(char *name, tnode *body, int isMain) {
 
     entry->name = strdup(name);
     entry->tree = tree;
+    entry->localTable = local;
+    while (local != NULL) {
+        if (local->binding > 0) {
+            entry->localCount++;
+        }
+        local = local->next;
+    }
     if (FunctionASTHead == NULL) {
         FunctionASTHead = entry;
     } else {

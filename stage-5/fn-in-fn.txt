@@ -1,0 +1,36 @@
+decl
+    int doubleValue(int x);
+    int addOne(int x);
+enddecl
+
+int doubleValue(int x) {
+    decl
+    enddecl
+    
+    begin
+        return x * 2;
+    end
+}
+
+int addOne(int x) {
+    decl
+        int y;
+    enddecl
+
+    begin
+        y = doubleValue(x);
+        return y + 1;
+    end
+}
+
+int main() {
+    decl
+        int result;
+    enddecl
+
+    begin
+        result = addOne(10);
+        write(result);
+        return 0;
+    end
+}

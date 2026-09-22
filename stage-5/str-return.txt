@@ -1,0 +1,24 @@
+decl
+    str getMessage();
+enddecl
+
+str getMessage() {
+    decl
+    enddecl
+    
+    begin
+        return "hello";
+    end
+}
+
+int main() {
+    decl
+        str message;
+    enddecl
+
+    begin
+        message = getMessage();
+        write(message);
+        return 0;
+    end
+}

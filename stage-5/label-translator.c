@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #define START_ADDRESS 2056
 #define HEADER_LINES 8
@@ -112,14 +113,15 @@ void secondPass(FILE* input, FILE* output) {
         // skip label declarations, copy everything else
         if (isLabel(line, label)) continue;
 
-        // handle JMP L0
+        // Translate symbolic unconditional-jump and function-call labels.
         char instruction[20]; // JMP
         char operand[20]; // Li
         if (sscanf(line, "%19s %19s", instruction, operand) == 2) {
             operand[strcspn(operand, "\r\n")] = '\0';
 
-            if (strcmp(instruction, "JMP") == 0) { 
-                fprintf(output, "JMP %d\n", findLabelAddress(operand));
+            if ((strcmp(instruction, "JMP") == 0 || strcmp(instruction, "CALL") == 0) &&
+                isalpha((unsigned char)operand[0])) {
+                fprintf(output, "%s %d\n", instruction, findLabelAddress(operand));
                 continue;
             }
         }
