@@ -5,11 +5,70 @@
 
 Gsymbol* Ghead = NULL;
 Lsymbol* Lhead = NULL;
+static TupleType *TupleHead = NULL;
+static int nextTupleType = TYPE_TUPLE_BASE;
 int nextBinding = 4096;
 int nextLocalBinding = 1;
 
 FunctionAST *FunctionASTHead = NULL;
 static FunctionAST *functionASTTail = NULL;
+
+static TupleType *FindTupleByType(int type) {
+    TupleType *tuple = TupleHead;
+    while (tuple != NULL) {
+        if (tuple->type == type) return tuple;
+        tuple = tuple->next;
+    }
+    return NULL;
+}
+
+int TupleTypeLookup(char *name) {
+    TupleType *tuple = TupleHead;
+    while (tuple != NULL) {
+        if (strcmp(tuple->name, name) == 0) return tuple->type;
+        tuple = tuple->next;
+    }
+    return -1;
+}
+
+int TuplePointerType(int tupleType) {
+    return TYPE_TUPLE_PTR_BASE + (tupleType - TYPE_TUPLE_BASE);
+}
+
+int TypeSize(int type) {
+    TupleType *tuple = FindTupleByType(type);
+    return tuple == NULL ? 1 : tuple->size;
+}
+
+int InstallTupleType(char *name, Field *fields) {
+    TupleType *tuple;
+    Field *field;
+    int offset = 0;
+
+    if (TupleTypeLookup(name) != -1) {
+        fprintf(stderr, "Error: tuple type '%s' is already declared\n", name);
+        exit(1);
+    }
+    tuple = calloc(1, sizeof(TupleType));
+    tuple->name = strdup(name);
+    tuple->type = nextTupleType++;
+    tuple->fields = fields;
+    for (field = fields; field != NULL; field = field->next) {
+        Field *previous;
+        for (previous = fields; previous != field; previous = previous->next) {
+            if (strcmp(previous->name, field->name) == 0) {
+                fprintf(stderr, "Error: duplicate field '%s' in tuple '%s'\n", field->name, name);
+                exit(1);
+            }
+        }
+        field->offset = offset;
+        offset += TypeSize(field->type);
+    }
+    tuple->size = offset;
+    tuple->next = TupleHead;
+    TupleHead = tuple;
+    return tuple->type;
+}
 
 Gsymbol* Lookup(char *name) { // searches the symbol table and returns the address of the matching symbol-table entry
     Gsymbol* temp = Ghead;
@@ -164,6 +223,7 @@ void BeginFunctionScope(Paramstruct *paramlist) {
 void InstallLocalVariables(VarList *varlist, int type) {
     while (varlist != NULL) {
         LInstall(varlist->name, type, nextLocalBinding++);
+        nextLocalBinding += TypeSize(type) - 1;
         varlist = varlist->next;
     }
 }
@@ -187,7 +247,7 @@ void SaveFunctionAST(char *name, tnode *body, int isMain) {
     entry->localTable = local;
     while (local != NULL) {
         if (local->binding > 0) {
-            entry->localCount++;
+            entry->localCount += TypeSize(local->type);
         }
         local = local->next;
     }
@@ -200,13 +260,25 @@ void SaveFunctionAST(char *name, tnode *body, int isMain) {
 }
 
 static const char *TypeName(int type) {
+    static char tupleName[80];
+    TupleType *tuple;
     switch (type) {
         case TYPE_INT: return "INT";
         case TYPE_STR: return "STR";
         case TYPE_INT_PTR: return "INT_PTR";
         case TYPE_STR_PTR: return "STR_PTR";
         case TYPE_BOOL: return "BOOL";
-        default: return "?";
+        default:
+            tuple = FindTupleByType(type);
+            if (tuple != NULL) return tuple->name;
+            if (type >= TYPE_TUPLE_PTR_BASE) {
+                tuple = FindTupleByType(TYPE_TUPLE_BASE + type - TYPE_TUPLE_PTR_BASE);
+                if (tuple != NULL) {
+                    snprintf(tupleName, sizeof(tupleName), "%s_PTR", tuple->name);
+                    return tupleName;
+                }
+            }
+            return "?";
     }
 }
 
@@ -260,7 +332,7 @@ void PrintSymbolTable() {
 }
 
 tnode* makeAddressNode(tnode *var) { // creates an AST node for the address-of operator
-    if (var->nodetype != NODE_ID) {
+    if (var->nodetype != NODE_ID && var->nodetype != NODE_FIELD) {
         fprintf(stderr, "Address-of operator can only be used with a variable\n");
         exit(1);
     }
@@ -271,6 +343,8 @@ tnode* makeAddressNode(tnode *var) { // creates an AST node for the address-of o
         pointerType = TYPE_INT_PTR;
     else if (var->type == TYPE_STR)
         pointerType = TYPE_STR_PTR;
+    else if (FindTupleByType(var->type) != NULL)
+        pointerType = TuplePointerType(var->type);
     else {
         fprintf(stderr, "Cannot take address of a pointer\n");
         exit(1);
@@ -286,6 +360,8 @@ tnode* makeDereferenceNode(tnode *ptr) { // EX2: creates an AST node for derefer
         valueType = TYPE_INT;
     else if (ptr->type == TYPE_STR_PTR)
         valueType = TYPE_STR;
+    else if (ptr->type >= TYPE_TUPLE_PTR_BASE)
+        valueType = TYPE_TUPLE_BASE + ptr->type - TYPE_TUPLE_PTR_BASE;
     else {
         fprintf(stderr, "Cannot dereference a non-pointer\n");
         exit(1);
@@ -426,6 +502,25 @@ tnode* makeIdNode(char* name) {
     return node;
 }
 
+tnode* makeFieldNode(char *tupleName, char *fieldName) {
+    tnode *base = makeIdNode(tupleName);
+    TupleType *tuple = FindTupleByType(base->type);
+    Field *field;
+
+    if (tuple == NULL) {
+        fprintf(stderr, "Error: '%s' is not a tuple variable\n", tupleName);
+        exit(1);
+    }
+    for (field = tuple->fields; field != NULL; field = field->next) {
+        if (strcmp(field->name, fieldName) == 0) {
+            return createTree(field->offset, field->type, NODE_FIELD, fieldName,
+                              base, NULL, NULL);
+        }
+    }
+    fprintf(stderr, "Error: tuple '%s' has no field '%s'\n", tupleName, fieldName);
+    exit(1);
+}
+
 tnode* makeAssignNode(tnode* id, tnode* expr) {
     if (id->type != expr->type) { // u can only assign an int/str (a = <bool> is gay)
         // eg: a = 5 > 3
@@ -438,10 +533,18 @@ tnode* makeAssignNode(tnode* id, tnode* expr) {
 }
 
 tnode* makeReadNode(tnode* id) {
+    if (FindTupleByType(id->type) != NULL) {
+        fprintf(stderr, "Error: read() requires a tuple field, not a whole tuple\n");
+        exit(1);
+    }
     return createTree(0, TYPE_INT, NODE_READ, NULL, id, NULL, NULL);
 }
 
 tnode* makeWriteNode(tnode* expr) {
+    if (FindTupleByType(expr->type) != NULL) {
+        fprintf(stderr, "Error: write() expects an int or str expression, not a tuple\n");
+        exit(1);
+    }
     return createTree(0, TYPE_INT, NODE_WRITE, NULL, expr, NULL, NULL);
 }
 
@@ -484,8 +587,9 @@ tnode* makeDoWhileNode(tnode* body, tnode* cond) {
 }
 
 tnode* makeReturnNode(tnode *expr) {
-    if (expr->type != TYPE_INT && expr->type != TYPE_STR) {
-        fprintf(stderr, "Error: a function can return only an int or str expression\n");
+    if (expr->type != TYPE_INT && expr->type != TYPE_STR &&
+        expr->type != TYPE_INT_PTR && expr->type != TYPE_STR_PTR) {
+        fprintf(stderr, "Error: a function can return only an int, str, or pointer expression\n");
         exit(1);
     }
     return createTree(0, expr->type, NODE_RETURN, NULL, expr, NULL, NULL);

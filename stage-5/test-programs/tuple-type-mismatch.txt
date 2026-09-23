@@ -1,0 +1,14 @@
+decl
+    tuple student (str name, int rollno) a;
+    tuple faculty (str name, int employeeid) x;
+enddecl
+
+int main()
+{
+    decl
+    enddecl
+
+    begin
+        a = x;
+    end
+}

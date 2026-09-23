@@ -20,6 +20,7 @@ int nextFunctionLabel = 0;
     int num;
     VarList* varlist;
     Paramstruct* paramlist;
+    Field* fieldlist;
 }
 
 // we do SYNTAX ANALYSIS here - checking if the syntax is right like ID ASSIGN E SEMICOLON
@@ -42,7 +43,7 @@ int nextFunctionLabel = 0;
 %token DECL ENDDECL
 %token INT STR
 %token ASSIGN SEMICOLON
-%token MAIN RETURN
+%token MAIN RETURN TUPLE
 
 %token READ WRITE
 %token IF THEN ELSE ENDIF
@@ -60,10 +61,13 @@ int nextFunctionLabel = 0;
 %type <node> RepeatStmt DoWhileStmt
 
 %type <num> Type // Type gets INT or STR and returns TYPE_INT or TYPE_STR as an integer value
+%type <num> FType
 %type <varlist> VarList
 %type <varlist> IdList
 %type <paramlist> ParamList
 %type <paramlist> Param
+%type <fieldlist> FieldList FieldDecl
+%type <varlist> TupleVarList
 
 %left OR
 %left AND
@@ -115,7 +119,18 @@ GDecl : Type VarList SEMICOLON {
         }
         temp = temp->next;
     }
-};
+}
+    | TUPLE ID '(' FieldList ')' TupleVarList SEMICOLON {
+        int tupleType = InstallTupleType($2, $4);
+        VarList *var = $6;
+
+        while (var != NULL) {
+            int type = var->isPointer ? TuplePointerType(tupleType) : tupleType;
+            Install(var->name, type, var->isPointer ? 1 : TypeSize(tupleType),
+                    0, 0, NULL, -1);
+            var = var->next;
+        }
+    };
 
 Type : INT {
         $$ = TYPE_INT;
@@ -123,6 +138,12 @@ Type : INT {
     | STR {
         $$ = TYPE_STR;
     };
+
+/* Used only where a complete function return type is expected. */
+FType : Type { $$ = $1; }
+      | Type MUL {
+          $$ = ($1 == TYPE_INT) ? TYPE_INT_PTR : TYPE_STR_PTR;
+      };
 
 /*
 This supports all of these:
@@ -228,6 +249,28 @@ VarList : VarList ',' ID '[' NUM ']' '[' NUM ']' {
         newVar->next = NULL;
         $$ = newVar;
     }
+    | VarList ',' MUL ID '(' ParamList ')' {
+        VarList *newVar = calloc(1, sizeof(VarList));
+        VarList *temp = $1;
+
+        newVar->name = $4;
+        newVar->isPointer = 1;
+        newVar->isFunction = 1;
+        newVar->paramlist = $6;
+
+        while (temp->next != NULL) temp = temp->next;
+        temp->next = newVar;
+        $$ = $1;
+    }
+    | MUL ID '(' ParamList ')' {
+        VarList *newVar = calloc(1, sizeof(VarList));
+
+        newVar->name = $2;
+        newVar->isPointer = 1;
+        newVar->isFunction = 1;
+        newVar->paramlist = $4;
+        $$ = newVar;
+    }
     |  VarList ',' ID'('ParamList')' {
         VarList *newVar = calloc(1, sizeof(VarList));
 
@@ -262,6 +305,51 @@ VarList : VarList ',' ID '[' NUM ']' '[' NUM ']' {
         $$ = newVar;
     };
 
+/* A tuple declaration contains primitive int/str fields in this exercise. */
+FieldList : FieldList ',' FieldDecl {
+        Field *tail = $1;
+        while (tail->next != NULL) tail = tail->next;
+        tail->next = $3;
+        $$ = $1;
+    }
+    | FieldDecl { $$ = $1; };
+
+FieldDecl : Type ID {
+        Field *field = calloc(1, sizeof(Field));
+        field->name = $2;
+        field->type = $1;
+        $$ = field;
+    };
+
+TupleVarList : TupleVarList ',' ID {
+        VarList *var = calloc(1, sizeof(VarList));
+        VarList *tail = $1;
+        var->name = $3;
+        while (tail->next != NULL) tail = tail->next;
+        tail->next = var;
+        $$ = $1;
+    }
+    | TupleVarList ',' MUL ID {
+        VarList *var = calloc(1, sizeof(VarList));
+        VarList *tail = $1;
+        var->name = $4;
+        var->isPointer = 1;
+        while (tail->next != NULL) tail = tail->next;
+        tail->next = var;
+        $$ = $1;
+    }
+    | ID {
+        VarList *var = calloc(1, sizeof(VarList));
+        var->name = $1;
+        $$ = var;
+    }
+    | MUL ID {
+        VarList *var = calloc(1, sizeof(VarList));
+        var->name = $2;
+        var->isPointer = 1;
+        $$ = var;
+    };
+
 // n â†’ makeIdNode("n")
 // arr[i] â†’ makeArrayNode("arr", AST of i)
 Variable : ID {
@@ -274,13 +362,16 @@ Variable : ID {
     | ID '[' E ']' '[' E ']' {
         $$ = makeArray2DNode($1, $3, $6);
     }
+    | ID '.' ID {
+        $$ = makeFieldNode($1, $3);
+    }
     | MUL Variable { // allows a dereferenced pointer as an assignment target
         $$ = makeDereferenceNode($2);
     };
 
 FDefBlock : FDefBlock FDef | FDef;
 
-FDef : Type ID'('ParamList')' {
+FDef : FType ID'('ParamList')' {
         CheckFunctionDefinition($2, $1, $4);
         BeginFunctionScope($4);
     } '{' LdeclBlock Body '}' {
@@ -314,6 +405,15 @@ Param : Type ID {
         p->next = NULL;
 
         $$ = p;
+    }
+    | Type MUL ID {
+        Paramstruct *p = malloc(sizeof(Paramstruct));
+
+        p->name = $3;
+        p->type = ($1 == TYPE_INT) ? TYPE_INT_PTR : TYPE_STR_PTR;
+        p->next = NULL;
+
+        $$ = p;
     };
 
 LdeclBlock : DECL LDecList ENDDECL | DECL ENDDECL;
@@ -322,6 +422,23 @@ LDecList : LDecList LDecl | LDecl;
 
 LDecl : Type IdList SEMICOLON {
         InstallLocalVariables($2, $1);
+    }
+    | Type MUL IdList SEMICOLON {
+        int pointerType = ($1 == TYPE_INT) ? TYPE_INT_PTR : TYPE_STR_PTR;
+        InstallLocalVariables($3, pointerType);
+    }
+    | TUPLE ID TupleVarList SEMICOLON {
+        int tupleType = TupleTypeLookup($2);
+        VarList *var = $3;
+
+        if (tupleType == -1) {
+            fprintf(stderr, "Error: tuple type '%s' is not declared\n", $2);
+            exit(1);
+        }
+        while (var != NULL) {
+            InstallLocalVariables(var, var->isPointer ? TuplePointerType(tupleType) : tupleType);
+            var = var->next;
+        }
     };
 
 IdList : IdList ',' ID {

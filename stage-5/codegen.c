@@ -56,6 +56,49 @@ static int idAddress(tnode *t) {
     return addressReg;
 }
 
+static int fieldAddress(tnode *t) {
+    int addressReg = idAddress(t->left);
+
+    fprintf(targetFile, "ADD R%d, %d\n", addressReg, t->val);
+    return addressReg;
+}
+
+static int isTupleType(int type) {
+    return type >= TYPE_TUPLE_BASE && type < TYPE_TUPLE_PTR_BASE;
+}
+
+static int tupleAddress(tnode *t) {
+    if (t->nodetype == NODE_ID) {
+        return idAddress(t);
+    }
+    if (t->nodetype == NODE_DEREFERENCE) {
+        return codeGen(t->left);
+    }
+    fprintf(stderr, "Tuple assignment requires a tuple variable or dereferenced tuple pointer\n");
+    exit(1);
+}
+
+/* Whole tuples are stored as consecutive field words. */
+static void copyTuple(tnode *destination, tnode *source) {
+    int destinationReg;
+    int sourceReg;
+    int words;
+    int i;
+
+    words = TypeSize(destination->type);
+    destinationReg = tupleAddress(destination);
+    sourceReg = tupleAddress(source);
+    for (i = 0; i < words; ++i) {
+        fprintf(targetFile, "MOV R19, [R%d]\n", sourceReg);
+        fprintf(targetFile, "MOV [R%d], R19\n", destinationReg);
+        if (i + 1 < words) {
+            fprintf(targetFile, "INR R%d\nINR R%d\n", destinationReg, sourceReg);
+        }
+    }
+    freeReg();
+    freeReg();
+}
+
 static int arrayAddress(tnode *t) {
     int indexReg = codeGen(t->left);
     int baseReg = getReg();
@@ -95,6 +138,8 @@ static void emitRead(tnode *variable) {
 
     if (variable->nodetype == NODE_ID) {
         addressReg = idAddress(variable);
+    } else if (variable->nodetype == NODE_FIELD) {
+        addressReg = fieldAddress(variable);
     } else if (variable->nodetype == NODE_ARRAY) {
         addressReg = arrayAddress(variable);
     } else if (variable->nodetype == NODE_ARRAY2D) {
@@ -193,7 +238,15 @@ int codeGen(tnode *t) {
         fprintf(targetFile, "MOV R%d, [R%d]\n", resultReg, resultReg);
         return resultReg;
 
+    case NODE_FIELD:
+        resultReg = fieldAddress(t);
+        fprintf(targetFile, "MOV R%d, [R%d]\n", resultReg, resultReg);
+        return resultReg;
+
     case NODE_ADDRESS:
+        if (t->left->nodetype == NODE_FIELD) {
+            return fieldAddress(t->left);
+        }
         return idAddress(t->left);
 
     case NODE_DEREFERENCE:
@@ -237,9 +290,15 @@ int codeGen(tnode *t) {
         return functionCall(t);
 
     case NODE_ASSIGN:
+        if (isTupleType(t->left->type)) {
+            copyTuple(t->left, t->right);
+            return -1;
+        }
         resultReg = codeGen(t->right);
         if (t->left->nodetype == NODE_ID) {
             addressReg = idAddress(t->left);
+        } else if (t->left->nodetype == NODE_FIELD) {
+            addressReg = fieldAddress(t->left);
         } else if (t->left->nodetype == NODE_ARRAY) {
             addressReg = arrayAddress(t->left);
         } else if (t->left->nodetype == NODE_ARRAY2D) {

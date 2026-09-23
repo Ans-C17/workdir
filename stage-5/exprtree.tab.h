@@ -75,21 +75,22 @@ extern int yydebug;
     SEMICOLON = 281,
     MAIN = 282,
     RETURN = 283,
-    READ = 284,
-    WRITE = 285,
-    IF = 286,
-    THEN = 287,
-    ELSE = 288,
-    ENDIF = 289,
-    WHILE = 290,
-    DO = 291,
-    ENDWHILE = 292,
-    REPEAT = 293,
-    UNTIL = 294,
-    BREAK = 295,
-    CONTINUE = 296,
-    STRING = 297,
-    UMINUS = 298
+    TUPLE = 284,
+    READ = 285,
+    WRITE = 286,
+    IF = 287,
+    THEN = 288,
+    ELSE = 289,
+    ENDIF = 290,
+    WHILE = 291,
+    DO = 292,
+    ENDWHILE = 293,
+    REPEAT = 294,
+    UNTIL = 295,
+    BREAK = 296,
+    CONTINUE = 297,
+    STRING = 298,
+    UMINUS = 299
   };
 #endif
 
@@ -104,8 +105,9 @@ union YYSTYPE
     int num;
     VarList* varlist;
     Paramstruct* paramlist;
+    Field* fieldlist;
 
-#line 109 "exprtree.tab.h"
+#line 111 "exprtree.tab.h"
 
 };
 typedef union YYSTYPE YYSTYPE;

@@ -47,6 +47,7 @@ void yyerror(const char* s);
 "end" { return T_END; }
 "main" { return MAIN; }
 "return" { return RETURN; }
+"tuple" { return TUPLE; }
 
 "decl" { return DECL; }
 "enddecl" { return ENDDECL; }
@@ -73,6 +74,7 @@ void yyerror(const char* s);
 
 "=" { return ASSIGN; }
 ";" { return SEMICOLON; }
+"." { return '.'; }
 
 \"[^\"]*\" {
     yytext[yyleng - 1] = '\0';

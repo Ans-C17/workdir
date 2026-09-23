@@ -1,0 +1,20 @@
+decl
+    tuple student(str name, int roll) a, b;
+enddecl
+
+int main()
+{
+    decl
+        tuple student local;
+    enddecl
+
+    begin
+        a.name = "Ada";
+        a.roll = 10;
+        b = a;
+        local = b;
+        write(local.name);
+        write(local.roll);
+        return 0;
+    end
+}

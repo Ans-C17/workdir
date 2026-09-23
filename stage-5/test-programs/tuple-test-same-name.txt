@@ -1,0 +1,21 @@
+decl
+    tuple student (str name, int rollno, str branchname, int yearofadmission) a;
+    tuple faculty (str name, int employeeid, str dept) x;
+enddecl
+
+int main()
+{
+    decl
+    enddecl
+
+    begin
+        read(a.name);
+        read(x.name);
+
+        if (a.name == x.name) then
+            write("same names");
+        endif;
+
+        return 0;
+    end
+}

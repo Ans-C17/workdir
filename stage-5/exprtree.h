@@ -36,7 +36,8 @@ enum {
     NODE_MAIN,
     NODE_ARG_LIST,
     NODE_OR,
-    NODE_AND
+    NODE_AND,
+    NODE_FIELD
 };
 
 enum {
@@ -47,11 +48,29 @@ enum {
     TYPE_STR_PTR
 };
 
+#define TYPE_TUPLE_BASE 1000
+#define TYPE_TUPLE_PTR_BASE 2000
+
 typedef struct Paramstruct {
     char* name;
     int type;
     struct Paramstruct* next;
 } Paramstruct;
+
+typedef struct Field {
+    char *name;
+    int type;
+    int offset;
+    struct Field *next;
+} Field;
+
+typedef struct TupleType {
+    char *name;
+    int type;
+    int size;
+    Field *fields;
+    struct TupleType *next;
+} TupleType;
 
 typedef struct VarList { // int a, b, c indel, oronninum oru node aayit linked list aakan
     // install() vilikumbo ivarellarum gsymbol tableilek povum
@@ -139,6 +158,7 @@ tnode* makeArray2DNode(char *name, tnode *rowIndex, tnode *colIndex);
 
 tnode* makeAddressNode(tnode *var); // creates an AST node for the address-of operator
 tnode* makeDereferenceNode(tnode *ptr); // creates an AST node for dereferencing a pointer
+tnode* makeFieldNode(char *tupleName, char *fieldName);
 
 struct Gsymbol* Lookup(char* name);
 void Install(char* name, int type, int size, int rows, int cols, Paramstruct *paramlist, int flabel); // add new var to symbol table    
@@ -149,5 +169,9 @@ void InstallLocalVariables(VarList *varlist, int type);
 void EndFunctionScope(void);
 void PrintLocalSymbolTable(char *functionName);
 void PrintSymbolTable();
+int InstallTupleType(char *name, Field *fields);
+int TupleTypeLookup(char *name);
+int TuplePointerType(int tupleType);
+int TypeSize(int type);
 
 #endif
