@@ -20,6 +20,7 @@ int nextFunctionLabel = 0;
     int num;
     VarList* varlist;
     Paramstruct* paramlist;
+    Typetable* type;
 }
 
 // we do SYNTAX ANALYSIS here - checking if the syntax is right like ID ASSIGN E SEMICOLON
@@ -63,6 +64,7 @@ int nextFunctionLabel = 0;
 %type <node> RepeatStmt DoWhileStmt
 
 %type <num> TypeName FType
+%type <type> FieldType
 %type <varlist> VarList
 %type <varlist> IdList
 %type <paramlist> ParamList
@@ -100,14 +102,40 @@ TypeDefList : TypeDefList TypeDef
             | TypeDef
             ;
 
-TypeDef : ID '{' FieldDeclList '}' { /* TODO: TInstall($1, size, $3). */ }
+TypeDef : ID '{' {
+            if (TBeginDefinition($1) == NULL) {
+                fprintf(stderr, "Error: type '%s' is already defined or cannot be started\n", $1);
+                exit(1);
+            }
+        } FieldDeclList '}' {
+            TFinishDefinition(TCurrentDefinition());
+        }
         ;
 
 FieldDeclList : FieldDeclList FieldDecl
               | FieldDecl
               ;
 
-FieldDecl : TypeName ID SEMICOLON { /* TODO: record this field in the type table. */ }
+FieldDecl : FieldType ID SEMICOLON {
+              Typetable *owner = TCurrentDefinition();
+              if (owner == NULL ||
+                  FInstall(owner, $2, $1, owner->size) == NULL) {
+                  fprintf(stderr, "Error: duplicate field '%s' or invalid field declaration\n", $2);
+                  exit(1);
+              }
+              owner->size++;
+          }
+          ;
+
+FieldType : INT { $$ = TLookup("int"); }
+          | STR { $$ = TLookup("str"); }
+          | ID {
+              $$ = TLookup($1);
+              if ($$ == NULL) {
+                  fprintf(stderr, "Error: field type '%s' is not defined yet\n", $1);
+                  exit(1);
+              }
+          }
           ;
 
 GDeclBlock : DECL GDeclList ENDDECL | DECL ENDDECL;
@@ -141,7 +169,13 @@ GDecl : TypeName VarList SEMICOLON {
 
 TypeName : INT { $$ = TYPE_INT; }
          | STR { $$ = TYPE_STR; }
-         | ID  { $$ = -1; /* user-defined type lookup is not implemented yet */ }
+         | ID  {
+             if (TLookup($1) == NULL) {
+                 fprintf(stderr, "Error: type '%s' is not defined yet\n", $1);
+                 exit(1);
+             }
+             $$ = -1; /* symbol-table type representation is a later step */
+         }
          ;
 
 FType : TypeName { $$ = $1; }

@@ -10,6 +10,7 @@ int nextLocalBinding = 1;
 
 static Typetable *Thead = NULL;
 static Typetable *Ttail = NULL;
+static Typetable *TcurrentDefinition = NULL;
 
 static Typetable *CreateTypeEntry(const char *name, int size) {
     Typetable *entry = calloc(1, sizeof(Typetable));
@@ -54,12 +55,84 @@ Typetable *TLookup(char *name) {
 
 Typetable *TInstall(char *name, int size, Fieldlist *fields) {
     Typetable *entry;
+    Fieldlist *field;
+    int index = 0;
     if (name == NULL || TLookup(name) != NULL) return NULL;
+
+    for (field = fields; field != NULL; field = field->next) {
+        Fieldlist *previous;
+        Typetable *knownType;
+        for (knownType = Thead; knownType != NULL; knownType = knownType->next) {
+            if (knownType == field->type) break;
+        }
+        if (field->name == NULL || field->type == NULL || knownType == NULL) return NULL;
+        for (previous = fields; previous != field; previous = previous->next) {
+            if (strcmp(previous->name, field->name) == 0) return NULL;
+        }
+        field->fieldIndex = index++;
+    }
 
     entry = CreateTypeEntry(name, size);
     if (entry == NULL) return NULL;
     entry->fields = fields;
     return entry;
+}
+
+Typetable *TBeginDefinition(char *name) {
+    Typetable *entry;
+    if (name == NULL || TLookup(name) != NULL || TcurrentDefinition != NULL) return NULL;
+
+    /* Install the incomplete entry first so fields may refer to this type recursively. */
+    entry = TInstall(name, 0, NULL);
+    if (entry == NULL) return NULL;
+    TcurrentDefinition = entry;
+    return entry;
+}
+
+Typetable *TCurrentDefinition(void) {
+    return TcurrentDefinition;
+}
+
+Fieldlist *FInstall(Typetable *owner, char *name, Typetable *fieldType, int fieldIndex) {
+    Fieldlist *field;
+    Fieldlist *tail;
+    Typetable *knownType;
+    if (owner == NULL || name == NULL || fieldType == NULL || owner != TcurrentDefinition)
+        return NULL;
+    for (knownType = Thead; knownType != NULL; knownType = knownType->next) {
+        if (knownType == fieldType) break;
+    }
+    if (knownType == NULL) return NULL;
+    if (FLookup(owner, name) != NULL) return NULL;
+
+    field = calloc(1, sizeof(Fieldlist));
+    if (field == NULL) return NULL;
+    field->name = strdup(name);
+    if (field->name == NULL) {
+        free(field);
+        return NULL;
+    }
+    field->fieldIndex = fieldIndex;
+    field->type = fieldType;
+    if (owner->fields == NULL) owner->fields = field;
+    else {
+        tail = owner->fields;
+        while (tail->next != NULL) tail = tail->next;
+        tail->next = field;
+    }
+    return field;
+}
+
+void TFinishDefinition(Typetable *type) {
+    Fieldlist *field;
+    int size = 0;
+    if (type == NULL || type != TcurrentDefinition) {
+        fprintf(stderr, "Error: invalid type definition state\n");
+        exit(1);
+    }
+    for (field = type->fields; field != NULL; field = field->next) size++;
+    type->size = size;
+    TcurrentDefinition = NULL;
 }
 
 Fieldlist *FLookup(Typetable *type, char *name) {

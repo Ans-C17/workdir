@@ -127,6 +127,10 @@ Typetable *TLookup(char *name);
 Typetable *TInstall(char *name, int size, Fieldlist *fields);
 Fieldlist *FLookup(Typetable *type, char *name);
 int GetSize(Typetable *type);
+Typetable *TBeginDefinition(char *name);
+Typetable *TCurrentDefinition(void);
+Fieldlist *FInstall(Typetable *owner, char *name, Typetable *fieldType, int fieldIndex);
+void TFinishDefinition(Typetable *type);
 
 tnode* createTree(int val, int type, int nodetype, char* varname, tnode* l, tnode* m, tnode* r);
 
