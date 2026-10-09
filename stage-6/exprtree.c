@@ -62,6 +62,17 @@ int TypeCode(Typetable *type) {
     return -1; /* AST user-type identity is handled in a later step. */
 }
 
+static Typetable *TypeEntryForCode(int type) {
+    switch (type) {
+        case TYPE_INT: return TLookup("int");
+        case TYPE_STR: return TLookup("str");
+        case TYPE_BOOL: return TLookup("bool");
+        case TYPE_INT_PTR: return TLookup("int_ptr");
+        case TYPE_STR_PTR: return TLookup("str_ptr");
+        default: return NULL;
+    }
+}
+
 Typetable *TLookup(char *name) {
     Typetable *entry;
     if (name == NULL) return NULL;
@@ -460,10 +471,12 @@ tnode* createTree(int val, int type, int nodetype, char* varname, tnode* l, tnod
 
     temp->val = val;
     temp->type = type;
+    temp->typeEntry = TypeEntryForCode(type);
     temp->nodetype = nodetype;
     temp->varname = varname;
     temp->Gentry = NULL;
     temp->Lentry = NULL;
+    temp->Fentry = NULL;
     temp->arglist = NULL;
     temp->left = l;
     temp->middle = m;
@@ -546,7 +559,8 @@ tnode* makeOperatorNode(char* op, tnode* l, tnode* r) {
         fprintf(stderr, "Type mismatch\n");
         exit(1);
     }
-    if ((nodetype == NODE_EQ || nodetype == NODE_NE) && l->type != r->type) {
+    if ((nodetype == NODE_EQ || nodetype == NODE_NE) &&
+        l->typeEntry != r->typeEntry) {
         fprintf(stderr, "Type mismatch\n");
         exit(1);
     }
@@ -568,6 +582,7 @@ tnode* makeIdNode(char* name) {
     /* Local scope takes precedence over a global declaration of the same name. */
     if (localEntry != NULL) {
         node = createTree(0, TypeCode(localEntry->type), NODE_ID, name, NULL, NULL, NULL);
+        node->typeEntry = localEntry->type;
         node->Lentry = localEntry;
         return node;
     }
@@ -583,12 +598,13 @@ tnode* makeIdNode(char* name) {
     }
 
     node = createTree(0, TypeCode(globalEntry->type), NODE_ID, name, NULL, NULL, NULL);
+    node->typeEntry = globalEntry->type;
     node->Gentry = globalEntry;
     return node;
 }
 
 tnode* makeAssignNode(tnode* id, tnode* expr) {
-    if (id->type != expr->type) { // u can only assign an int/str (a = <bool> is gay)
+    if (id->typeEntry != expr->typeEntry) { // assignments require identical type entries
         // eg: a = 5 > 3
         // i.e id type and rhs type same avanam
         fprintf(stderr, "Type mismatch\n");
@@ -645,21 +661,25 @@ tnode* makeDoWhileNode(tnode* body, tnode* cond) {
 }
 
 tnode* makeReturnNode(tnode *expr) {
-    if (expr->type != TYPE_INT && expr->type != TYPE_STR &&
-        expr->type != TYPE_INT_PTR && expr->type != TYPE_STR_PTR) {
+    if (expr->typeEntry == NULL || expr->typeEntry == TLookup("bool") ||
+        expr->typeEntry == TLookup("void") || expr->typeEntry == TLookup("null")) {
         fprintf(stderr, "Error: invalid function return type\n");
         exit(1);
     }
-    return createTree(0, expr->type, NODE_RETURN, NULL, expr, NULL, NULL);
+    tnode *node = createTree(0, expr->type, NODE_RETURN, NULL, expr, NULL, NULL);
+    node->typeEntry = expr->typeEntry;
+    return node;
 }
 
 tnode* makeBodyNode(tnode *statements, tnode *returnNode) {
-    return createTree(0, returnNode->type, NODE_BODY, NULL,
-                      statements, NULL, returnNode);
+    tnode *node = createTree(0, returnNode->type, NODE_BODY, NULL,
+                             statements, NULL, returnNode);
+    node->typeEntry = returnNode->typeEntry;
+    return node;
 }
 
-tnode* finalizeBodyNode(tnode *body, int returnType, char *functionName) {
-    if (body->type != returnType) {
+tnode* finalizeBodyNode(tnode *body, Typetable *returnType, char *functionName) {
+    if (body->typeEntry != returnType) {
         fprintf(stderr, "Error: return type of function '%s' does not match its declaration\n",
                 functionName);
         exit(1);
@@ -668,7 +688,9 @@ tnode* finalizeBodyNode(tnode *body, int returnType, char *functionName) {
 }
 
 tnode* makeArgListNode(tnode *expr) {
-    return createTree(0, expr->type, NODE_ARG_LIST, NULL, expr, NULL, NULL);
+    tnode *node = createTree(0, expr->type, NODE_ARG_LIST, NULL, expr, NULL, NULL);
+    node->typeEntry = expr->typeEntry;
+    return node;
 }
 
 tnode* appendArgNode(tnode *arglist, tnode *expr) {
@@ -701,7 +723,7 @@ tnode* makeFunctionCallNode(char *name, tnode *arglist) {
     formal = function->paramlist;
     actual = arglist;
     while (formal != NULL && actual != NULL) {
-        if (TypeCode(formal->type) != actual->left->type) {
+        if (formal->type != actual->left->typeEntry) {
             fprintf(stderr, "Error: argument %d of '%s' has the wrong type\n",
                     position, name);
             exit(1);
@@ -716,6 +738,7 @@ tnode* makeFunctionCallNode(char *name, tnode *arglist) {
     }
 
     node = createTree(0, TypeCode(function->type), NODE_FUNCTION, name, NULL, NULL, NULL);
+    node->typeEntry = function->type;
     node->Gentry = function;
     node->arglist = arglist;
     return node;
@@ -758,6 +781,7 @@ tnode* makeArrayNode(char* name, tnode* index) { // index is an expression E
     }
 
     tnode* node = createTree(0, TypeCode(entry->type), NODE_ARRAY, name, index, NULL, NULL);
+    node->typeEntry = entry->type;
     node->Gentry = entry;
 
     return node;
@@ -781,7 +805,36 @@ tnode* makeArray2DNode(char *name, tnode *rowIndex, tnode *colIndex) {
 	}
 
 	tnode *node = createTree(0, TypeCode(entry->type), NODE_ARRAY2D, name, rowIndex, colIndex, NULL);
+	node->typeEntry = entry->type;
 	node->Gentry = entry;
 
 	return node;
+}
+
+tnode* makeFieldNode(tnode *base, char *fieldName) {
+    Fieldlist *field;
+    tnode *node;
+
+    if (base == NULL || base->typeEntry == NULL || fieldName == NULL) {
+        fprintf(stderr, "Error: invalid field access\n");
+        exit(1);
+    }
+
+    if (base->typeEntry->fields == NULL) {
+        fprintf(stderr, "Error: type '%s' has no fields\n", base->typeEntry->name);
+        exit(1);
+    }
+
+    field = FLookup(base->typeEntry, fieldName);
+    if (field == NULL) {
+        fprintf(stderr, "Error: type '%s' has no field named '%s'\n",
+                base->typeEntry->name, fieldName);
+        exit(1);
+    }
+
+    node = createTree(0, TypeCode(field->type), NODE_FIELD, fieldName,
+                      base, NULL, NULL);
+    node->typeEntry = field->type;
+    node->Fentry = field;
+    return node;
 }

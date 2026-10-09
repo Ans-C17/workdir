@@ -36,7 +36,8 @@ enum {
     NODE_MAIN,
     NODE_ARG_LIST,
     NODE_OR,
-    NODE_AND
+    NODE_AND,
+    NODE_FIELD
 };
 
 enum {
@@ -101,12 +102,14 @@ typedef struct Lsymbol {
 } Lsymbol;
 
 typedef struct tnode {
-	int type; // type of variable - INT, BOOL for now
+	int type; // legacy primitive type code used by existing AST/codegen logic
+    Typetable *typeEntry; // exact type identity, including user-defined types
 	int val; // value of a number for NUM nodes - 5, 10
 	char* varname; // name of a variable for ID nodes - a,b,...,z
     int nodetype; // information about non-leaf nodes - read/write/connector/+/* etc
     Gsymbol* Gentry; // pointer to corresponding GST entry
     Lsymbol* Lentry; // pointer to corresponding local-symbol-table entry
+    Fieldlist *Fentry; // field-table entry for a NODE_FIELD
     struct tnode *arglist; // expressions passed to a function call
     struct tnode *left, *middle, *right;
 } tnode;
@@ -156,7 +159,7 @@ tnode* makeRepeatNode(tnode* body, tnode* cond);
 tnode* makeDoWhileNode(tnode* body, tnode* cond);
 tnode* makeReturnNode(tnode *expr);
 tnode* makeBodyNode(tnode *statements, tnode *returnNode);
-tnode* finalizeBodyNode(tnode *body, int returnType, char *functionName);
+tnode* finalizeBodyNode(tnode *body, Typetable *returnType, char *functionName);
 tnode* makeFunctionCallNode(char *name, tnode *arglist);
 tnode* makeArgListNode(tnode *expr);
 tnode* appendArgNode(tnode *arglist, tnode *expr);
@@ -164,6 +167,7 @@ void SaveFunctionAST(char *name, tnode *body, int isMain);
 
 tnode* makeArrayNode(char* name, tnode* index); // for accessing array elements
 tnode* makeArray2DNode(char *name, tnode *rowIndex, tnode *colIndex);
+tnode* makeFieldNode(tnode *base, char *fieldName);
 
 tnode* makeAddressNode(tnode *var); // creates an AST node for the address-of operator
 tnode* makeDereferenceNode(tnode *ptr); // creates an AST node for dereferencing a pointer

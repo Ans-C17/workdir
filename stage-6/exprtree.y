@@ -365,9 +365,13 @@ Variable : ID {
         $$ = makeDereferenceNode($2);
     };
 
-/* Nested field designators match FIELD : ID '.' ID | FIELD '.' ID. */
-Field : ID '.' ID { $$ = NULL; /* TODO: construct/check a field access node. */ }
-     | Field '.' ID { $$ = NULL; /* TODO: construct/check a field access node. */ }
+/* Resolve every segment against the type of the preceding base expression. */
+Field : ID '.' ID {
+            $$ = makeFieldNode(makeIdNode($1), $3);
+        }
+     | Field '.' ID {
+            $$ = makeFieldNode($1, $3);
+        }
      ;
 
 FDefBlock : FDefBlock FDef | FDef;
@@ -376,7 +380,7 @@ FDef : FType ID'('ParamList')' {
         CheckFunctionDefinition($2, $1, $4);
         BeginFunctionScope($4);
     } '{' LdeclBlock Body '}' {
-        SaveFunctionAST($2, finalizeBodyNode($9, TypeCode($1), $2), 0);
+        SaveFunctionAST($2, finalizeBodyNode($9, $1, $2), 0);
         PrintLocalSymbolTable($2);
         EndFunctionScope();
     };
@@ -474,7 +478,7 @@ ReturnStmt : RETURN E SEMICOLON { $$ = makeReturnNode($2); };
 MainBlock : INT MAIN '(' ')' '{' {
         BeginFunctionScope(NULL);
     } LdeclBlock Body '}' {
-        root = finalizeBodyNode($8, TYPE_INT, "main");
+        root = finalizeBodyNode($8, TLookup("int"), "main");
         SaveFunctionAST("main", root, 1);
         PrintLocalSymbolTable("main");
         EndFunctionScope();
