@@ -484,8 +484,9 @@ tnode* makeDoWhileNode(tnode* body, tnode* cond) {
 }
 
 tnode* makeReturnNode(tnode *expr) {
-    if (expr->type != TYPE_INT && expr->type != TYPE_STR) {
-        fprintf(stderr, "Error: a function can return only an int or str expression\n");
+    if (expr->type != TYPE_INT && expr->type != TYPE_STR &&
+        expr->type != TYPE_INT_PTR && expr->type != TYPE_STR_PTR) {
+        fprintf(stderr, "Error: invalid function return type\n");
         exit(1);
     }
     return createTree(0, expr->type, NODE_RETURN, NULL, expr, NULL, NULL);

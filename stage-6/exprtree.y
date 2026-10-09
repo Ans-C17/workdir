@@ -59,7 +59,7 @@ int nextFunctionLabel = 0;
 %type <node> BreakStmt ContinueStmt
 %type <node> RepeatStmt DoWhileStmt
 
-%type <num> Type // Type gets INT or STR and returns TYPE_INT or TYPE_STR as an integer value
+%type <num> Type FType
 %type <varlist> VarList
 %type <varlist> IdList
 %type <paramlist> ParamList
@@ -123,6 +123,11 @@ Type : INT {
     | STR {
         $$ = TYPE_STR;
     };
+
+FType : Type { $$ = $1; }
+      | Type MUL {
+          $$ = ($1 == TYPE_INT) ? TYPE_INT_PTR : TYPE_STR_PTR;
+      };
 
 /*
 This supports all of these:
@@ -260,6 +265,28 @@ VarList : VarList ',' ID '[' NUM ']' '[' NUM ']' {
         newVar->next = NULL;
 
         $$ = newVar;
+    }
+    | VarList ',' MUL ID '(' ParamList ')' {
+        VarList *newVar = calloc(1, sizeof(VarList));
+        VarList *tail = $1;
+
+        newVar->name = $4;
+        newVar->isPointer = 1;
+        newVar->isFunction = 1;
+        newVar->paramlist = $6;
+
+        while (tail->next != NULL) tail = tail->next;
+        tail->next = newVar;
+        $$ = $1;
+    }
+    | MUL ID '(' ParamList ')' {
+        VarList *newVar = calloc(1, sizeof(VarList));
+
+        newVar->name = $2;
+        newVar->isPointer = 1;
+        newVar->isFunction = 1;
+        newVar->paramlist = $4;
+        $$ = newVar;
     };
 
 // n â†’ makeIdNode("n")
@@ -280,7 +307,7 @@ Variable : ID {
 
 FDefBlock : FDefBlock FDef | FDef;
 
-FDef : Type ID'('ParamList')' {
+FDef : FType ID'('ParamList')' {
         CheckFunctionDefinition($2, $1, $4);
         BeginFunctionScope($4);
     } '{' LdeclBlock Body '}' {
@@ -313,6 +340,14 @@ Param : Type ID {
         p->type = $1;
         p->next = NULL;
 
+        $$ = p;
+    }
+    | Type MUL ID {
+        Paramstruct *p = malloc(sizeof(Paramstruct));
+
+        p->name = $3;
+        p->type = ($1 == TYPE_INT) ? TYPE_INT_PTR : TYPE_STR_PTR;
+        p->next = NULL;
         $$ = p;
     };
 
