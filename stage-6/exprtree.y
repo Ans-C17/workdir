@@ -63,8 +63,7 @@ int nextFunctionLabel = 0;
 %type <node> BreakStmt ContinueStmt
 %type <node> RepeatStmt DoWhileStmt
 
-%type <num> TypeName FType
-%type <type> FieldType
+%type <type> TypeName FType FieldType
 %type <varlist> VarList
 %type <varlist> IdList
 %type <paramlist> ParamList
@@ -150,10 +149,13 @@ GDecl : TypeName VarList SEMICOLON {
     VarList* temp = $2;
 
     while (temp != NULL) {
-        int varType = $1;
+        Typetable *varType = $1;
         if (temp->isPointer) {
-            if ($1 == TYPE_INT) varType = TYPE_INT_PTR;
-            else if ($1 == TYPE_STR) varType = TYPE_STR_PTR;
+            varType = PointerType($1);
+            if (varType == NULL) {
+                fprintf(stderr, "Error: pointer declarations are supported only for int and str\n");
+                exit(1);
+            }
         }
 
         if (temp->isFunction) {
@@ -167,20 +169,24 @@ GDecl : TypeName VarList SEMICOLON {
     }
 };
 
-TypeName : INT { $$ = TYPE_INT; }
-         | STR { $$ = TYPE_STR; }
+TypeName : INT { $$ = TLookup("int"); }
+         | STR { $$ = TLookup("str"); }
          | ID  {
              if (TLookup($1) == NULL) {
                  fprintf(stderr, "Error: type '%s' is not defined yet\n", $1);
                  exit(1);
              }
-             $$ = -1; /* symbol-table type representation is a later step */
+             $$ = TLookup($1);
          }
          ;
 
 FType : TypeName { $$ = $1; }
       | TypeName MUL {
-          $$ = ($1 == TYPE_INT) ? TYPE_INT_PTR : TYPE_STR_PTR;
+          $$ = PointerType($1);
+          if ($$ == NULL) {
+              fprintf(stderr, "Error: pointer types are supported only for int and str\n");
+              exit(1);
+          }
       };
 
 /*
@@ -370,7 +376,7 @@ FDef : FType ID'('ParamList')' {
         CheckFunctionDefinition($2, $1, $4);
         BeginFunctionScope($4);
     } '{' LdeclBlock Body '}' {
-        SaveFunctionAST($2, finalizeBodyNode($9, $1, $2), 0);
+        SaveFunctionAST($2, finalizeBodyNode($9, TypeCode($1), $2), 0);
         PrintLocalSymbolTable($2);
         EndFunctionScope();
     };
@@ -405,7 +411,11 @@ Param : TypeName ID {
         Paramstruct *p = malloc(sizeof(Paramstruct));
 
         p->name = $3;
-        p->type = ($1 == TYPE_INT) ? TYPE_INT_PTR : TYPE_STR_PTR;
+        p->type = PointerType($1);
+        if (p->type == NULL) {
+            fprintf(stderr, "Error: pointer parameters are supported only for int and str\n");
+            exit(1);
+        }
         p->next = NULL;
         $$ = p;
     };

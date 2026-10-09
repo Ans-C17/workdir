@@ -65,7 +65,7 @@ typedef struct Fieldlist {
 
 typedef struct Paramstruct {
     char* name;
-    int type;
+    Typetable *type;
     struct Paramstruct* next;
 } Paramstruct;
 
@@ -83,7 +83,7 @@ typedef struct VarList { // int a, b, c indel, oronninum oru node aayit linked l
 
 typedef struct Gsymbol {
     char *name;
-    int type;
+    Typetable *type;
     int size; // default 1, we take the value of varlist and copy it here, gtable is the collection of all varlists
     int rows;
 	int cols;
@@ -95,7 +95,7 @@ typedef struct Gsymbol {
 
 typedef struct Lsymbol {
     char *name;
-    int type;
+    Typetable *type;
     int binding;
     struct Lsymbol *next;
 } Lsymbol;
@@ -127,6 +127,8 @@ Typetable *TLookup(char *name);
 Typetable *TInstall(char *name, int size, Fieldlist *fields);
 Fieldlist *FLookup(Typetable *type, char *name);
 int GetSize(Typetable *type);
+Typetable *PointerType(Typetable *type);
+int TypeCode(Typetable *type);
 Typetable *TBeginDefinition(char *name);
 Typetable *TCurrentDefinition(void);
 Fieldlist *FInstall(Typetable *owner, char *name, Typetable *fieldType, int fieldIndex);
@@ -167,11 +169,11 @@ tnode* makeAddressNode(tnode *var); // creates an AST node for the address-of op
 tnode* makeDereferenceNode(tnode *ptr); // creates an AST node for dereferencing a pointer
 
 struct Gsymbol* Lookup(char* name);
-void Install(char* name, int type, int size, int rows, int cols, Paramstruct *paramlist, int flabel); // add new var to symbol table    
-void CheckFunctionDefinition(char *name, int returnType, Paramstruct *paramlist);
+void Install(char* name, Typetable *type, int size, int rows, int cols, Paramstruct *paramlist, int flabel);
+void CheckFunctionDefinition(char *name, Typetable *returnType, Paramstruct *paramlist);
 Lsymbol *LLookup(char *name);
 void BeginFunctionScope(Paramstruct *paramlist);
-void InstallLocalVariables(VarList *varlist, int type);
+void InstallLocalVariables(VarList *varlist, Typetable *type);
 void EndFunctionScope(void);
 void PrintLocalSymbolTable(char *functionName);
 void PrintSymbolTable();
