@@ -44,8 +44,24 @@ enum {
     TYPE_BOOL,
     TYPE_STR,
     TYPE_INT_PTR,
-    TYPE_STR_PTR
+    TYPE_STR_PTR,
+    TYPE_VOID,
+    TYPE_NULL
 };
+
+typedef struct Typetable {
+    char *name;                 // type name
+    int size;                   // number of words in a value of this type
+    struct Fieldlist *fields;   // fields for user-defined aggregate types
+    struct Typetable *next;
+} Typetable;
+
+typedef struct Fieldlist {
+    char *name;                 // field name
+    int fieldIndex;             // position in the containing type
+    Typetable *type;             // declared type of this field
+    struct Fieldlist *next;
+} Fieldlist;
 
 typedef struct Paramstruct {
     char* name;
@@ -105,6 +121,12 @@ typedef struct FunctionAST {
 
 extern FunctionAST *FunctionASTHead;
 extern int nextBinding;
+
+void TypeTableCreate(void);
+Typetable *TLookup(char *name);
+Typetable *TInstall(char *name, int size, Fieldlist *fields);
+Fieldlist *FLookup(Typetable *type, char *name);
+int GetSize(Typetable *type);
 
 tnode* createTree(int val, int type, int nodetype, char* varname, tnode* l, tnode* m, tnode* r);
 

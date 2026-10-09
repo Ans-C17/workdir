@@ -625,6 +625,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    TypeTableCreate();
     if (yyparse() != 0) {
         fclose(yyin);
         return 1;

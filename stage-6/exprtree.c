@@ -8,6 +8,74 @@ Lsymbol* Lhead = NULL;
 int nextBinding = 4096;
 int nextLocalBinding = 1;
 
+static Typetable *Thead = NULL;
+static Typetable *Ttail = NULL;
+
+static Typetable *CreateTypeEntry(const char *name, int size) {
+    Typetable *entry = calloc(1, sizeof(Typetable));
+    if (entry == NULL) return NULL;
+
+    entry->name = strdup(name);
+    if (entry->name == NULL) {
+        free(entry);
+        return NULL;
+    }
+    entry->size = size;
+
+    if (Thead == NULL) Thead = entry;
+    else Ttail->next = entry;
+    Ttail = entry;
+    return entry;
+}
+
+void TypeTableCreate(void) {
+    /* Safe to call more than once; preserve user entries if already initialized. */
+    if (Thead != NULL) return;
+
+    if (CreateTypeEntry("int", 1) == NULL ||
+        CreateTypeEntry("str", 1) == NULL ||
+        CreateTypeEntry("bool", 1) == NULL ||
+        CreateTypeEntry("void", 0) == NULL ||
+        CreateTypeEntry("null", 0) == NULL) {
+        fprintf(stderr, "Error: could not initialize type table\n");
+        exit(1);
+    }
+}
+
+Typetable *TLookup(char *name) {
+    Typetable *entry;
+    if (name == NULL) return NULL;
+
+    for (entry = Thead; entry != NULL; entry = entry->next) {
+        if (strcmp(entry->name, name) == 0) return entry;
+    }
+    return NULL;
+}
+
+Typetable *TInstall(char *name, int size, Fieldlist *fields) {
+    Typetable *entry;
+    if (name == NULL || TLookup(name) != NULL) return NULL;
+
+    entry = CreateTypeEntry(name, size);
+    if (entry == NULL) return NULL;
+    entry->fields = fields;
+    return entry;
+}
+
+Fieldlist *FLookup(Typetable *type, char *name) {
+    Fieldlist *field;
+    if (type == NULL || name == NULL) return NULL;
+
+    for (field = type->fields; field != NULL; field = field->next) {
+        if (strcmp(field->name, name) == 0) return field;
+    }
+    return NULL;
+}
+
+int GetSize(Typetable *type) {
+    return type == NULL ? 0 : type->size;
+}
+
 FunctionAST *FunctionASTHead = NULL;
 static FunctionAST *functionASTTail = NULL;
 
