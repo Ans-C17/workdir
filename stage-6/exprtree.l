@@ -52,9 +52,13 @@ void yyerror(const char* s);
 "enddecl" { return ENDDECL; }
 "int" { return INT; }
 "str" { return STR; }
+"type" { return TYPE; }
+"endtype" { return ENDTYPE; }
 
 "read" { return READ; }
 "write" { return WRITE; }
+"alloc" { return ALLOC; }
+"free" { return FREE; }
 
 "if" { return IF; }
 "then" { return THEN; }

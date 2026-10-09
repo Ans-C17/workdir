@@ -38,6 +38,9 @@ int nextFunctionLabel = 0;
 
 %token ADDRESS
 
+/* ExpL user-defined types and heap operations (semantic support is pending). */
+%token TYPE ENDTYPE ALLOC FREE
+
 %token T_BEGIN T_END 
 %token DECL ENDDECL
 %token INT STR
@@ -54,12 +57,12 @@ int nextFunctionLabel = 0;
 // 1. terminal -> %TOKEN (with or without semantic value, declaration required)
 // 2. non terminal -> %TYPE (not required if no semantic value)
 
-%type <node> Program MainBlock Body ReturnStmt ArgList Slist Stmt InputStmt OutputStmt AsgStmt E Variable
+%type <node> Program MainBlock Body ReturnStmt ArgList Slist Stmt InputStmt OutputStmt AsgStmt E Variable Field
 %type <node> IfStmt WhileStmt
 %type <node> BreakStmt ContinueStmt
 %type <node> RepeatStmt DoWhileStmt
 
-%type <num> Type FType
+%type <num> TypeName FType
 %type <varlist> VarList
 %type <varlist> IdList
 %type <paramlist> ParamList
@@ -84,15 +87,34 @@ int nextFunctionLabel = 0;
 // if it is partially matched it shifts to next state, expecting another token
 // if it matches a complete grammar rule, it reduces it into the non terminal on the left
 // runs the yacc code block, and continues on with the reduced state
-Program : GDeclBlock FDefBlock MainBlock { $$ = $3; }
-        | GDeclBlock MainBlock           { $$ = $2; }
-        | MainBlock                      { $$ = $1; };
+Program : TypeDefBlock GDeclBlock FDefBlock MainBlock { $$ = $4; }
+        | TypeDefBlock GDeclBlock MainBlock           { $$ = $3; }
+        | TypeDefBlock MainBlock                      { $$ = $2; };
+
+/* Type-table actions from the reference grammar need a type table in this project. */
+TypeDefBlock : TYPE TypeDefList ENDTYPE
+             | /* empty */
+             ;
+
+TypeDefList : TypeDefList TypeDef
+            | TypeDef
+            ;
+
+TypeDef : ID '{' FieldDeclList '}' { /* TODO: TInstall($1, size, $3). */ }
+        ;
+
+FieldDeclList : FieldDeclList FieldDecl
+              | FieldDecl
+              ;
+
+FieldDecl : TypeName ID SEMICOLON { /* TODO: record this field in the type table. */ }
+          ;
 
 GDeclBlock : DECL GDeclList ENDDECL | DECL ENDDECL;
 
 GDeclList : GDeclList GDecl | GDecl;
 
-GDecl : Type VarList SEMICOLON {
+GDecl : TypeName VarList SEMICOLON {
     // if i have like 
     // int a, b;
     // int c, d; (in two lines)
@@ -117,15 +139,13 @@ GDecl : Type VarList SEMICOLON {
     }
 };
 
-Type : INT {
-        $$ = TYPE_INT;
-    }
-    | STR {
-        $$ = TYPE_STR;
-    };
+TypeName : INT { $$ = TYPE_INT; }
+         | STR { $$ = TYPE_STR; }
+         | ID  { $$ = -1; /* user-defined type lookup is not implemented yet */ }
+         ;
 
-FType : Type { $$ = $1; }
-      | Type MUL {
+FType : TypeName { $$ = $1; }
+      | TypeName MUL {
           $$ = ($1 == TYPE_INT) ? TYPE_INT_PTR : TYPE_STR_PTR;
       };
 
@@ -305,6 +325,11 @@ Variable : ID {
         $$ = makeDereferenceNode($2);
     };
 
+/* Nested field designators match FIELD : ID '.' ID | FIELD '.' ID. */
+Field : ID '.' ID { $$ = NULL; /* TODO: construct/check a field access node. */ }
+     | Field '.' ID { $$ = NULL; /* TODO: construct/check a field access node. */ }
+     ;
+
 FDefBlock : FDefBlock FDef | FDef;
 
 FDef : FType ID'('ParamList')' {
@@ -333,7 +358,7 @@ ParamList : ParamList ',' Param {
         $$ = NULL;
     };
 
-Param : Type ID {
+Param : TypeName ID {
         Paramstruct *p = malloc(sizeof(Paramstruct));
 
         p->name = $2;
@@ -342,7 +367,7 @@ Param : Type ID {
 
         $$ = p;
     }
-    | Type MUL ID {
+    | TypeName MUL ID {
         Paramstruct *p = malloc(sizeof(Paramstruct));
 
         p->name = $3;
@@ -355,7 +380,7 @@ LdeclBlock : DECL LDecList ENDDECL | DECL ENDDECL;
 
 LDecList : LDecList LDecl | LDecl;
 
-LDecl : Type IdList SEMICOLON {
+LDecl : TypeName IdList SEMICOLON {
         InstallLocalVariables($2, $1);
     };
 
@@ -457,11 +482,27 @@ Stmt : InputStmt {
     }
     | DoWhileStmt {
         $$ = $1;
+    }
+    | Variable ASSIGN ALLOC '(' ')' SEMICOLON {
+        $$ = NULL; /* TODO: implement allocation assignment semantics/codegen. */
+    }
+    | Field ASSIGN ALLOC '(' ')' SEMICOLON {
+        $$ = NULL; /* TODO: implement field allocation semantics/codegen. */
+    }
+    | FREE '(' ID ')' SEMICOLON {
+        $$ = NULL; /* TODO: implement free semantics/codegen. */
+    }
+    | FREE '(' Field ')' SEMICOLON {
+        $$ = NULL; /* TODO: implement field free semantics/codegen. */
     };
 
 InputStmt : READ '(' Variable ')' SEMICOLON { // u read into a var, like read(b);
         $$ = makeReadNode($3);
-    };
+    }
+    | READ '(' Field ')' SEMICOLON {
+        $$ = makeReadNode($3);
+    }
+    ;
 
 OutputStmt : WRITE '(' E ')' SEMICOLON { // u can write an expression like write(5+8);
         $$ = makeWriteNode($3);
@@ -469,7 +510,11 @@ OutputStmt : WRITE '(' E ')' SEMICOLON { // u can write an expression like write
 
 AsgStmt : Variable ASSIGN E SEMICOLON {
         $$ = makeAssignNode($1, $3);
-    };
+    }
+    | Field ASSIGN E SEMICOLON {
+        $$ = makeAssignNode($1, $3);
+    }
+    ;
 
 IfStmt : IF '(' E ')' THEN Slist ELSE Slist ENDIF SEMICOLON {
         $$ = makeIfNode($3, $6, $8);
@@ -553,6 +598,9 @@ E : E PLUS E {
         $$ = makeAddressNode($2);
     }
     | Variable {
+        $$ = $1;
+    }
+    | Field {
         $$ = $1;
     }
     | ID'('')' {
