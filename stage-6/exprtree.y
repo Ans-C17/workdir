@@ -411,15 +411,6 @@ MainBlock : INT MAIN '(' ')' '{' {
         EndFunctionScope();
         $$ = NULL;
     }
-    /* Stage 4 form retained so existing non-function test programs still parse. */
-    | T_BEGIN Slist T_END SEMICOLON {
-        root = $2;
-        $$ = $2;
-    } 
-    | T_BEGIN T_END SEMICOLON {
-        root = NULL; // no syntax tree as T_BEGIN & T_END are non-terminals
-        $$ = NULL;
-    };
 
 // so Slist is not storing the source text
 // it just stores the pointer. the root = $2 (remember, %type <node> slist?)
