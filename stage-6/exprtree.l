@@ -31,6 +31,7 @@ void yyerror(const char* s);
 "(" { return '('; }
 ")" { return ')'; }
 "," { return ','; }
+"." { return '.'; }
  
 "<=" { return LE; } // flex dont rly care about ordering, it checks for longest match first
 "<" { return LT; } // if length same only it checks for order and returns whatever matched before

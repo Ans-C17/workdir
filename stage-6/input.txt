@@ -1,34 +1,21 @@
+type
+    student {
+        int marks;
+    }
+endtype
+
 decl
-    int x, y;
-    int swap(int *p, int *q);
+    student s;
+    int x;
 enddecl
-
-int swap(int *p, int *q)
-{
-    decl
-        int temp;
-    enddecl
-
-    begin
-        temp = *p;
-        *p = *q;
-        *q = temp;
-        return 0;
-    end
-}
 
 int main()
 {
     decl
-        int status;
     enddecl
-
+    
     begin
-        x = 10;
-        y = 20;
-        status = swap(&x, &y);
-        write(x);
-        write(y);
+        x = s.;
         return 0;
     end
 }
