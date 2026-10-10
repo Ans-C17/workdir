@@ -179,6 +179,43 @@ int GetSize(Typetable *type) {
     return type == NULL ? 0 : type->size;
 }
 
+int IsUserDefinedType(Typetable *type) {
+    return type != NULL &&
+           type != TLookup("int") &&
+           type != TLookup("str") &&
+           type != TLookup("bool") &&
+           type != TLookup("void") &&
+           type != TLookup("null") &&
+           type != TLookup("int_ptr") &&
+           type != TLookup("str_ptr");
+}
+
+void PrintTypeTable(void) {
+    Typetable *type;
+
+    printf("\nType Table\n");
+    printf("%-20s %s\n", "Type", "Size (words)");
+    printf("%-20s %s\n", "--------------------", "------------");
+
+    for (type = Thead; type != NULL; type = type->next) {
+        printf("%-20s %d\n", type->name, type->size);
+    }
+
+    printf("\nField Table\n");
+    printf("%-20s %-12s %-20s %s\n",
+           "Type", "Field index", "Field name", "Field type");
+    printf("%-20s %-12s %-20s %s\n",
+           "--------------------", "------------", "--------------------", "----------");
+    for (type = Thead; type != NULL; type = type->next) {
+        Fieldlist *field;
+        for (field = type->fields; field != NULL; field = field->next) {
+            printf("%-20s %-12d %-20s %s\n",
+                   type->name, field->fieldIndex, field->name,
+                   field->type == NULL ? "?" : field->type->name);
+        }
+    }
+}
+
 FunctionAST *FunctionASTHead = NULL;
 static FunctionAST *functionASTTail = NULL;
 
@@ -393,8 +430,8 @@ void PrintLocalSymbolTable(char *functionName) {
     printf("\nLocal Symbol Table: %s\n", functionName);
     PrintTableHeader();
     while (temp != NULL) {
-        printf("%-16s %-10s %-8s %-10d %-24s %-14s\n",
-               temp->name, SymbolTypeName(temp->type), "-", temp->binding, "-", "-");
+        printf("%-16s %-10s %-8d %-10d %-24s %-14s\n",
+               temp->name, SymbolTypeName(temp->type), 1, temp->binding, "-", "-");
         temp = temp->next;
     }
 }
@@ -612,7 +649,7 @@ tnode* makeIdNode(char* name) {
 tnode* makeAssignNode(tnode* id, tnode* expr) {
     // rhs null avanam + lhs null avaruth + lhs field indel athu null avaruth (field = null anel athu default type aan not user-defined)
     int nullToUserType = expr->typeEntry == TLookup("null") &&
-                         id->typeEntry != NULL && id->typeEntry->fields != NULL;
+                         IsUserDefinedType(id->typeEntry);
 
     if (id->typeEntry != expr->typeEntry && !nullToUserType) {
         // eg: a = 5 > 3

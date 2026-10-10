@@ -131,6 +131,8 @@ Typetable *TLookup(char *name);
 Typetable *TInstall(char *name, int size, Fieldlist *fields);
 Fieldlist *FLookup(Typetable *type, char *name);
 int GetSize(Typetable *type);
+int IsUserDefinedType(Typetable *type);
+void PrintTypeTable(void);
 Typetable *PointerType(Typetable *type);
 int TypeCode(Typetable *type);
 Typetable *TBeginDefinition(char *name);

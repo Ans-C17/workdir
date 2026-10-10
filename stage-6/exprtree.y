@@ -131,8 +131,8 @@ FieldType : INT { $$ = TLookup("int"); }
           | STR { $$ = TLookup("str"); }
           | ID {
               $$ = TLookup($1);
-              if ($$ == NULL) {
-                  fprintf(stderr, "Error: field type '%s' is not defined yet\n", $1);
+              if ($$ == NULL || !IsUserDefinedType($$)) {
+                  fprintf(stderr, "Error: field type '%s' is undefined or not declarable here\n", $1);
                   exit(1);
               }
           }
@@ -173,11 +173,12 @@ GDecl : TypeName VarList SEMICOLON {
 TypeName : INT { $$ = TLookup("int"); }
          | STR { $$ = TLookup("str"); }
          | ID  {
-             if (TLookup($1) == NULL) {
+             Typetable *resolvedType = TLookup($1);
+             if (resolvedType == NULL || !IsUserDefinedType(resolvedType)) {
                  fprintf(stderr, "Error: type '%s' is not defined yet\n", $1);
                  exit(1);
              }
-             $$ = TLookup($1);
+             $$ = resolvedType;
          }
          ;
 
@@ -544,7 +545,7 @@ Stmt : InputStmt {
     | FREE '(' Field ')' SEMICOLON {
         $$ = NULL; /* TODO: implement field free semantics/codegen. */
     };
-
+    
 InputStmt : READ '(' Variable ')' SEMICOLON { // u read into a var, like read(b);
         $$ = makeReadNode($3);
     }
@@ -683,6 +684,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    PrintTypeTable();
     PrintSymbolTable();
     targetFile = fopen("target.xsm", "w");
     if (targetFile == NULL) {
