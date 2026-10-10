@@ -493,6 +493,12 @@ tnode* makeStrNode(char *s) {
     return createTree(0, TYPE_STR, NODE_STR, s, NULL, NULL, NULL); // we put s into varname field as first arg (int val) is int
 }
 
+tnode* makeNullNode(void) {
+    tnode *node = createTree(0, TYPE_NULL, NODE_NULL, NULL, NULL, NULL, NULL);
+    node->typeEntry = TLookup("null");
+    return node;
+}
+
 tnode* makeOperatorNode(char* op, tnode* l, tnode* r) {
     int nodetype;
     int type;
@@ -604,7 +610,11 @@ tnode* makeIdNode(char* name) {
 }
 
 tnode* makeAssignNode(tnode* id, tnode* expr) {
-    if (id->typeEntry != expr->typeEntry) { // assignments require identical type entries
+    // rhs null avanam + lhs null avaruth + lhs field indel athu null avaruth (field = null anel athu default type aan not user-defined)
+    int nullToUserType = expr->typeEntry == TLookup("null") &&
+                         id->typeEntry != NULL && id->typeEntry->fields != NULL;
+
+    if (id->typeEntry != expr->typeEntry && !nullToUserType) {
         // eg: a = 5 > 3
         // i.e id type and rhs type same avanam
         fprintf(stderr, "Type mismatch\n");

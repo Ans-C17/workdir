@@ -55,6 +55,7 @@ void yyerror(const char* s);
 "str" { return STR; }
 "type" { return TYPE; }
 "endtype" { return ENDTYPE; }
+"NULL" { return T_NULL; }
 
 "read" { return READ; }
 "write" { return WRITE; }

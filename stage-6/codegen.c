@@ -188,6 +188,11 @@ int codeGen(tnode *t) {
         fprintf(targetFile, "MOV R%d, \"%s\"\n", resultReg, t->varname);
         return resultReg;
 
+    case NODE_NULL:
+        resultReg = getReg();
+        fprintf(targetFile, "MOV R%d, 0\n", resultReg);
+        return resultReg;
+
     case NODE_ID:
         resultReg = idAddress(t);
         fprintf(targetFile, "MOV R%d, [R%d]\n", resultReg, resultReg);

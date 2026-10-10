@@ -37,7 +37,8 @@ enum {
     NODE_ARG_LIST,
     NODE_OR,
     NODE_AND,
-    NODE_FIELD
+    NODE_FIELD,
+    NODE_NULL
 };
 
 enum {
@@ -141,6 +142,7 @@ tnode* createTree(int val, int type, int nodetype, char* varname, tnode* l, tnod
 
 tnode* makeNumNode(int n);
 tnode* makeStrNode(char *s);
+tnode* makeNullNode(void);
 
 tnode* makeOperatorNode(char* op, tnode* l, tnode* r);
 tnode* makeIdNode(char* name);

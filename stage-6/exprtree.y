@@ -41,6 +41,7 @@ int nextFunctionLabel = 0;
 
 /* ExpL user-defined types and heap operations (semantic support is pending). */
 %token TYPE ENDTYPE ALLOC FREE
+%token T_NULL
 
 %token T_BEGIN T_END 
 %token DECL ENDDECL
@@ -641,6 +642,9 @@ E : E PLUS E {
     }
     | STRING {
         $$ = makeStrNode($1);
+    }
+    | T_NULL {
+        $$ = makeNullNode();
     }
     | ADDRESS Variable { // address-of operator returns the address of a variable
         $$ = makeAddressNode($2);
