@@ -38,7 +38,9 @@ enum {
     NODE_OR,
     NODE_AND,
     NODE_FIELD,
-    NODE_NULL
+    NODE_NULL,
+    NODE_ALLOC,
+    NODE_FREE
 };
 
 enum {
@@ -149,6 +151,8 @@ tnode* makeNullNode(void);
 tnode* makeOperatorNode(char* op, tnode* l, tnode* r);
 tnode* makeIdNode(char* name);
 tnode* makeAssignNode(tnode* id, tnode* expr);
+tnode* makeAllocNode(tnode *target);
+tnode* makeFreeNode(tnode *target);
 tnode* makeReadNode(tnode* id);
 tnode* makeWriteNode(tnode* expr);
 tnode* makeConnectorNode(tnode* l, tnode* r);

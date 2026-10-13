@@ -1,21 +1,25 @@
 type
-    student {
-        int marks;
+    Node {
+        int value;
     }
 endtype
 
 decl
-    student s;
-    int x;
+    Node n;
 enddecl
 
 int main()
 {
     decl
     enddecl
-    
+
     begin
-        x = s.;
+        n = alloc();
+        n.value = 10;
+        free(n);
+        free(n);
+        write(n.value);
+        write("ans");
         return 0;
     end
 }

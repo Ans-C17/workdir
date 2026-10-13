@@ -602,10 +602,18 @@ tnode* makeOperatorNode(char* op, tnode* l, tnode* r) {
         fprintf(stderr, "Type mismatch\n");
         exit(1);
     }
-    if ((nodetype == NODE_EQ || nodetype == NODE_NE) &&
-        l->typeEntry != r->typeEntry) {
-        fprintf(stderr, "Type mismatch\n");
-        exit(1);
+    if (nodetype == NODE_EQ || nodetype == NODE_NE) {
+        int sameNamedType = l->typeEntry == r->typeEntry;
+        int leftIsNull = l->typeEntry == TLookup("null");
+        int rightIsNull = r->typeEntry == TLookup("null");
+        int nullComparedWithUserType =
+            (leftIsNull && IsUserDefinedType(r->typeEntry)) ||
+            (rightIsNull && IsUserDefinedType(l->typeEntry));
+
+        if (!sameNamedType && !nullComparedWithUserType) {
+            fprintf(stderr, "Type mismatch\n");
+            exit(1);
+        }
     }
     if (nodetype != NODE_EQ && nodetype != NODE_NE &&
         nodetype != NODE_OR && nodetype != NODE_AND &&
@@ -659,6 +667,41 @@ tnode* makeAssignNode(tnode* id, tnode* expr) {
     }
 
     return createTree(0, TYPE_INT, NODE_ASSIGN, NULL, id, NULL, expr);
+}
+
+tnode* makeAllocNode(tnode *target) {
+    int size;
+    tnode *node;
+
+    if (target == NULL || !IsUserDefinedType(target->typeEntry)) {
+        fprintf(stderr, "Error: alloc() target must have a user-defined type\n");
+        exit(1);
+    }
+
+    size = GetSize(target->typeEntry);
+    if (size <= 0 || size > 8) {
+        fprintf(stderr,
+                "Error: type '%s' needs %d words; alloc() supports types of 1 to 8 words\n",
+                target->typeEntry->name, size);
+        exit(1);
+    }
+
+    node = createTree(0, TYPE_INT, NODE_ALLOC, NULL, target, NULL, NULL);
+    node->typeEntry = target->typeEntry;
+    return node;
+}
+
+tnode* makeFreeNode(tnode *target) {
+    tnode *node;
+
+    if (target == NULL || !IsUserDefinedType(target->typeEntry)) {
+        fprintf(stderr, "Error: free() argument must have a user-defined type\n");
+        exit(1);
+    }
+
+    node = createTree(0, TYPE_INT, NODE_FREE, NULL, target, NULL, NULL);
+    node->typeEntry = target->typeEntry;
+    return node;
 }
 
 tnode* makeReadNode(tnode* id) {

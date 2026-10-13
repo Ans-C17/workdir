@@ -534,16 +534,16 @@ Stmt : InputStmt {
         $$ = $1;
     }
     | Variable ASSIGN ALLOC '(' ')' SEMICOLON {
-        $$ = NULL; /* TODO: implement allocation assignment semantics/codegen. */
+        $$ = makeAllocNode($1);
     }
     | Field ASSIGN ALLOC '(' ')' SEMICOLON {
-        $$ = NULL; /* TODO: implement field allocation semantics/codegen. */
+        $$ = makeAllocNode($1);
     }
     | FREE '(' ID ')' SEMICOLON {
-        $$ = NULL; /* TODO: implement free semantics/codegen. */
+        $$ = makeFreeNode(makeIdNode($3));
     }
     | FREE '(' Field ')' SEMICOLON {
-        $$ = NULL; /* TODO: implement field free semantics/codegen. */
+        $$ = makeFreeNode($3);
     };
     
 InputStmt : READ '(' Variable ')' SEMICOLON { // u read into a var, like read(b);

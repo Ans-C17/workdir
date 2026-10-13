@@ -84,24 +84,100 @@ static int array2Address(tnode *t) {
     return rowReg;
 }
 
+/* Return the address of a variable, array element, dereference, or field. */
+static int lvalueAddress(tnode *t) {
+    int addressReg;
+
+    switch (t->nodetype) {
+    case NODE_ID:
+        return idAddress(t);
+    case NODE_ARRAY:
+        return arrayAddress(t);
+    case NODE_ARRAY2D:
+        return array2Address(t);
+    case NODE_DEREFERENCE:
+        return codeGen(t->left);
+    case NODE_FIELD:
+        addressReg = lvalueAddress(t->left);
+        /* A user-defined value is represented by a pointer in its storage slot. */
+        fprintf(targetFile, "MOV R%d, [R%d]\n", addressReg, addressReg);
+        fprintf(targetFile, "ADD R%d, %d\n", addressReg, t->Fentry->fieldIndex);
+        return addressReg;
+    default:
+        fprintf(stderr, "Error: expression is not an assignable location\n");
+        exit(1);
+    }
+}
+
 static void emitExit(void) {
     fprintf(targetFile, "MOV R19, \"Exit\"\n");
     fprintf(targetFile, "PUSH R19\nPUSH R19\nPUSH R19\nPUSH R19\nPUSH R19\n");
     fprintf(targetFile, "CALL 0\n");
 }
 
-static void emitRead(tnode *variable) {
-    int addressReg;
+/* Keep allocator code in the generated program.  R19 is outside the
+ * expression register allocator; save the live expression registers before
+ * using R1-R5 as allocator temporaries. */
+static void saveRegsThrough(int lastReg) {
+    int i;
+    for (i = 0; i <= lastReg; ++i) fprintf(targetFile, "PUSH R%d\n", i);
+}
 
-    if (variable->nodetype == NODE_ID) {
-        addressReg = idAddress(variable);
-    } else if (variable->nodetype == NODE_ARRAY) {
-        addressReg = arrayAddress(variable);
-    } else if (variable->nodetype == NODE_ARRAY2D) {
-        addressReg = array2Address(variable);
-    } else {
-        addressReg = codeGen(variable->left);
-    }
+static void restoreRegsThrough(int lastReg) {
+    int i;
+    for (i = lastReg; i >= 0; --i) fprintf(targetFile, "POP R%d\n", i);
+}
+
+static void emitHeapInit(void) {
+    int loop = getLabel();
+    int done = getLabel();
+
+    /* Address 1024 stores the head.  Blocks are eight words each, starting
+     * at 1032; the first word of each free block links to the next one. */
+    fprintf(targetFile, "MOV R1, 1032\nMOV R2, 1040\nMOV R3, 2040\n");
+    fprintf(targetFile, "L%d:\nMOV R4, R1\nEQ R4, R3\nJNZ R4, L%d\n", loop, done);
+    fprintf(targetFile, "MOV [R1], R2\nADD R1, 8\nADD R2, 8\nJMP L%d\n", loop);
+    fprintf(targetFile, "L%d:\nMOV R4, -1\nMOV [R1], R4\n", done);
+    fprintf(targetFile, "MOV R1, 1024\nMOV R2, 1032\nMOV [R1], R2\n");
+}
+
+static void emitAlloc(int resultReg, int savedTop, int size) {
+    int bad = getLabel();
+    int haveBlock = getLabel();
+    int done = getLabel();
+
+    saveRegsThrough(savedTop);
+    fprintf(targetFile, "MOV R1, %d\nMOV R2, 0\nMOV R3, R1\nLE R3, R2\nJNZ R3, L%d\n", size, bad);
+    fprintf(targetFile, "MOV R2, 8\nMOV R3, R1\nGT R3, R2\nJNZ R3, L%d\n", bad);
+    fprintf(targetFile, "MOV R1, [1024]\nMOV R2, -1\nMOV R3, R1\nEQ R3, R2\nJZ R3, L%d\n", haveBlock);
+    fprintf(targetFile, "L%d:\nMOV R1, -1\nMOV R%d, R1\nJMP L%d\n", bad, resultReg, done);
+    fprintf(targetFile, "L%d:\nMOV R2, [R1]\nMOV [1024], R2\n", haveBlock);
+    fprintf(targetFile, "MOV R%d, R1\nL%d:\n", resultReg, done);
+    restoreRegsThrough(savedTop);
+}
+
+static void emitFree(int pointerReg, int savedTop) {
+    int bad = getLabel();
+    int scan = getLabel();
+    int clear = getLabel();
+    int clearLoop = getLabel();
+    int done = getLabel();
+
+    saveRegsThrough(savedTop);
+    fprintf(targetFile, "MOV R1, R%d\nMOV R2, 1032\nMOV R3, R1\nLT R3, R2\nJNZ R3, L%d\n", pointerReg, bad);
+    fprintf(targetFile, "MOV R2, 2040\nMOV R3, R1\nGT R3, R2\nJNZ R3, L%d\n", bad);
+    fprintf(targetFile, "MOV R2, R1\nSUB R2, 1032\nMOV R3, 8\nMOD R2, R3\nJNZ R2, L%d\n", bad);
+    fprintf(targetFile, "MOV R2, [1024]\nL%d:\nMOV R3, -1\nMOV R4, R2\nEQ R4, R3\nJNZ R4, L%d\n", scan, clear);
+    fprintf(targetFile, "MOV R4, R2\nEQ R4, R1\nJNZ R4, L%d\nMOV R2, [R2]\nJMP L%d\n", bad, scan);
+    fprintf(targetFile, "L%d:\nMOV R3, R1\nMOV R4, 0\nMOV R5, 8\n", clear);
+    fprintf(targetFile, "L%d:\nMOV [R3], R4\nADD R3, 1\nSUB R5, 1\nJNZ R5, L%d\n", clearLoop, clearLoop);
+    fprintf(targetFile, "MOV R2, [1024]\nMOV [R1], R2\nMOV [1024], R1\nJMP L%d\n", done);
+    fprintf(targetFile, "L%d:\nL%d:\n", bad, done);
+    restoreRegsThrough(savedTop);
+}
+
+static void emitRead(tnode *variable) {
+    int addressReg = lvalueAddress(variable);
 
     fprintf(targetFile, "MOV R19, \"Read\"\nPUSH R19\n");
     fprintf(targetFile, "MOV R19, -1\nPUSH R19\n");
@@ -206,6 +282,11 @@ int codeGen(tnode *t) {
         fprintf(targetFile, "MOV R%d, [R%d]\n", resultReg, resultReg);
         return resultReg;
 
+    case NODE_FIELD:
+        resultReg = lvalueAddress(t);
+        fprintf(targetFile, "MOV R%d, [R%d]\n", resultReg, resultReg);
+        return resultReg;
+
     case NODE_ARRAY:
         resultReg = arrayAddress(t);
         fprintf(targetFile, "MOV R%d, [R%d]\n", resultReg, resultReg);
@@ -243,17 +324,24 @@ int codeGen(tnode *t) {
 
     case NODE_ASSIGN:
         resultReg = codeGen(t->right);
-        if (t->left->nodetype == NODE_ID) {
-            addressReg = idAddress(t->left);
-        } else if (t->left->nodetype == NODE_ARRAY) {
-            addressReg = arrayAddress(t->left);
-        } else if (t->left->nodetype == NODE_ARRAY2D) {
-            addressReg = array2Address(t->left);
-        } else {
-            addressReg = codeGen(t->left->left);
-        }
+        addressReg = lvalueAddress(t->left);
         fprintf(targetFile, "MOV [R%d], R%d\n", addressReg, resultReg);
         freeReg();
+        freeReg();
+        return -1;
+
+    case NODE_ALLOC:
+        resultReg = getReg();
+        emitAlloc(resultReg, resultReg - 1, GetSize(t->left->typeEntry));
+        addressReg = lvalueAddress(t->left);
+        fprintf(targetFile, "MOV [R%d], R%d\n", addressReg, resultReg);
+        freeReg();
+        freeReg();
+        return -1;
+
+    case NODE_FREE:
+        resultReg = codeGen(t->left);
+        emitFree(resultReg, reg);
         freeReg();
         return -1;
 
@@ -370,8 +458,12 @@ static void prologue(int localCount) {
 void generateProgram(FunctionAST *functions) {
     FunctionAST *function;
 
-    fprintf(targetFile, "0\n2056\n0\n0\n0\n0\n0\n0\n");
-    fprintf(targetFile, "MOV SP, %d\nJMP MAIN\n", nextBinding - 1);
+    /* Header word 8 enables the runtime library used by Write/Read/Exit. */
+    fprintf(targetFile, "0\n2056\n0\n0\n0\n0\n0\n1\n");
+    fprintf(targetFile, "MOV SP, %d\n", nextBinding - 1);
+    emitHeapInit();
+    fprintf(targetFile, "MOV R0, 0\n");
+    fprintf(targetFile, "JMP MAIN\n");
 
     for (function = functions; function != NULL; function = function->next) {
         reg = -1;
