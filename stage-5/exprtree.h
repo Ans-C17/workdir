@@ -85,21 +85,21 @@ typedef struct VarList { // int a, b, c indel, oronninum oru node aayit linked l
 } VarList;
 
 typedef struct Gsymbol {
-    char *name;
-    int type;
+    char *name; // name of var or func
+    int type; // type of var 
     int size; // default 1, we take the value of varlist and copy it here, gtable is the collection of all varlists
     int rows;
 	int cols;
-    int binding; // memory address of the variable (4099)
-    struct Paramstruct* paramlist;
-    int flabel;
-    struct Gsymbol* next;
+    int binding; // memory address of the global vars (4096 muthal oro var size anusarich) so we can assign address b4 program executes
+    struct Paramstruct* paramlist; // parameters of a fn is linked list, athinte head
+    int flabel; // f0, f1 etc. when program sees "fibonacci" -> it looks it up in the symbol table, finds its flabel, does CALL F1, then label translated
+    struct Gsymbol* next; // next gsymboltable entry
 } Gsymbol;
 
 typedef struct Lsymbol {
     char *name;
     int type;
-    int binding;
+    int binding; // relative to BP, value given during runtime, BP = currently run cheyyana functionte activation recordinte base address
     struct Lsymbol *next;
 } Lsymbol;
 

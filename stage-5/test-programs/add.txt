@@ -1,9 +1,12 @@
 decl
+    int dummy;
+    int dummy2;
     int add(int a, int b);
 enddecl
 
 int add(int a, int b) {
     decl
+        int vereDummy;
     enddecl
     
     begin

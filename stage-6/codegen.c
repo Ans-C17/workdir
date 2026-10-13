@@ -60,7 +60,12 @@ static int arrayAddress(tnode *t) {
     int indexReg = codeGen(t->left);
     int baseReg = getReg();
 
-    fprintf(targetFile, "MOV R%d, %d\n", baseReg, t->Gentry->binding);
+    if (t->Lentry != NULL) {
+        fprintf(targetFile, "MOV R%d, BP\n", baseReg);
+        fprintf(targetFile, "ADD R%d, %d\n", baseReg, t->Lentry->binding);
+    } else {
+        fprintf(targetFile, "MOV R%d, %d\n", baseReg, t->Gentry->binding);
+    }
     fprintf(targetFile, "ADD R%d, R%d\n", indexReg, baseReg);
     freeReg();
     return indexReg;
@@ -72,8 +77,14 @@ static int array2Address(tnode *t) {
     int baseReg = getReg();
     int colsReg = getReg();
 
-    fprintf(targetFile, "MOV R%d, %d\n", baseReg, t->Gentry->binding);
-    fprintf(targetFile, "MOV R%d, %d\n", colsReg, t->Gentry->cols);
+    if (t->Lentry != NULL) {
+        fprintf(targetFile, "MOV R%d, BP\n", baseReg);
+        fprintf(targetFile, "ADD R%d, %d\n", baseReg, t->Lentry->binding);
+        fprintf(targetFile, "MOV R%d, %d\n", colsReg, t->Lentry->cols);
+    } else {
+        fprintf(targetFile, "MOV R%d, %d\n", baseReg, t->Gentry->binding);
+        fprintf(targetFile, "MOV R%d, %d\n", colsReg, t->Gentry->cols);
+    }
     fprintf(targetFile, "MUL R%d, R%d\n", rowReg, colsReg);
     fprintf(targetFile, "ADD R%d, R%d\n", rowReg, colReg);
     fprintf(targetFile, "ADD R%d, R%d\n", rowReg, baseReg);

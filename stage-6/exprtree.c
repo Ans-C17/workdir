@@ -231,7 +231,7 @@ Gsymbol* Lookup(char *name) { // searches the symbol table and returns the addre
     return NULL;
 }
 
-void Install(char *name, Typetable *type, int size, int rows, int cols, Paramstruct *paramlist, int flabel) { 
+void Install(char *name, Typetable *type, int size, int rows, int cols, int isArray, Paramstruct *paramlist, int flabel) {
     // entry to symbol table
     if (type == NULL) {
         fprintf(stderr, "Error: symbol '%s' has an undefined type\n", name);
@@ -249,6 +249,7 @@ void Install(char *name, Typetable *type, int size, int rows, int cols, Paramstr
     newEntry->size = size;
     newEntry->rows = rows;
 	newEntry->cols = cols;
+    newEntry->isArray = isArray;
 
     newEntry->paramlist = paramlist;
     newEntry->flabel = flabel;
@@ -335,7 +336,8 @@ b      INT    -4    ← parameter
 x      INT     1    ← local
 msg    STR     2    ← local */
 
-static void LInstall(char *name, Typetable *type, int binding) {
+static void LInstall(char *name, Typetable *type, int binding,
+                     int size, int rows, int cols, int isArray) {
     Lsymbol *entry;
     Lsymbol *temp;
 
@@ -352,6 +354,10 @@ static void LInstall(char *name, Typetable *type, int binding) {
     entry->name = strdup(name);
     entry->type = type;
     entry->binding = binding;
+    entry->size = size;
+    entry->rows = rows;
+    entry->cols = cols;
+    entry->isArray = isArray;
 
     if (Lhead == NULL) {
         Lhead = entry;
@@ -372,14 +378,18 @@ void BeginFunctionScope(Paramstruct *paramlist) {
     Lhead = NULL;
     nextLocalBinding = 1;
     while (paramlist != NULL) {
-        LInstall(paramlist->name, paramlist->type, parameterBinding--);
+        LInstall(paramlist->name, paramlist->type, parameterBinding--,
+                 1, 0, 0, 0);
         paramlist = paramlist->next;
     }
 }
 
 void InstallLocalVariables(VarList *varlist, Typetable *type) {
     while (varlist != NULL) {
-        LInstall(varlist->name, type, nextLocalBinding++);
+        int size = varlist->isArray ? varlist->size : 1;
+        LInstall(varlist->name, type, nextLocalBinding,
+                 size, varlist->rows, varlist->cols, varlist->isArray);
+        nextLocalBinding += size;
         varlist = varlist->next;
     }
 }
@@ -403,7 +413,7 @@ void SaveFunctionAST(char *name, tnode *body, int isMain) {
     entry->localTable = local;
     while (local != NULL) {
         if (local->binding > 0) {
-            entry->localCount++;
+            entry->localCount += local->size;
         }
         local = local->next;
     }
@@ -431,7 +441,7 @@ void PrintLocalSymbolTable(char *functionName) {
     PrintTableHeader();
     while (temp != NULL) {
         printf("%-16s %-10s %-8d %-10d %-24s %-14s\n",
-               temp->name, SymbolTypeName(temp->type), 1, temp->binding, "-", "-");
+               temp->name, SymbolTypeName(temp->type), temp->size, temp->binding, "-", "-");
         temp = temp->next;
     }
 }
@@ -846,14 +856,25 @@ tnode* makeFunctionCallNode(char *name, tnode *arglist) {
 //    NUM(0)       NUM(1)
 
 tnode* makeArrayNode(char* name, tnode* index) { // index is an expression E 
-    if (LLookup(name) != NULL) {
-        fprintf(stderr, "Error: local variable '%s' is not an array\n", name);
+    Lsymbol *local = LLookup(name);
+    Gsymbol *global = local == NULL ? Lookup(name) : NULL;
+    Typetable *elementType;
+    int size, cols, isArray;
+
+    if (local == NULL && global == NULL) {
+        fprintf(stderr, "Error: array '%s' is not declared\n", name);
         exit(1);
     }
-    struct Gsymbol* entry = Lookup(name);
-
-    if (entry == NULL) {
-        printf("Error: Variable %s not declared\n", name);
+    elementType = local != NULL ? local->type : global->type;
+    size = local != NULL ? local->size : global->size;
+    cols = local != NULL ? local->cols : global->cols;
+    isArray = local != NULL ? local->isArray : global->isArray;
+    if (!isArray) {
+        fprintf(stderr, "Error: '%s' is not an array\n", name);
+        exit(1);
+    }
+    if (cols > 0) {
+        fprintf(stderr, "Error: two-dimensional array '%s' requires two indices\n", name);
         exit(1);
     }
 
@@ -863,29 +884,37 @@ tnode* makeArrayNode(char* name, tnode* index) { // index is an expression E
     }
 
     if (index->nodetype == NODE_NUM) {
-        if (index->val >= entry->size) {
+        if (index->val >= size) {
             fprintf(stderr, "Error: Array index %d out of bounds (array size %d)\n", 
-                    index->val, entry->size);
+                    index->val, size);
             exit(1);
         }
     }
 
-    tnode* node = createTree(0, TypeCode(entry->type), NODE_ARRAY, name, index, NULL, NULL);
-    node->typeEntry = entry->type;
-    node->Gentry = entry;
+    tnode* node = createTree(0, TypeCode(elementType), NODE_ARRAY, name, index, NULL, NULL);
+    node->typeEntry = elementType;
+    node->Gentry = global;
+    node->Lentry = local;
 
     return node;
 }
 
 tnode* makeArray2DNode(char *name, tnode *rowIndex, tnode *colIndex) {
-	if (LLookup(name) != NULL) {
-		fprintf(stderr, "Error: local variable '%s' is not an array\n", name);
+	Lsymbol *local = LLookup(name);
+	Gsymbol *global = local == NULL ? Lookup(name) : NULL;
+	Typetable *elementType;
+	int rows, cols, isArray;
+
+	if (local == NULL && global == NULL) {
+		fprintf(stderr, "Error: array '%s' is not declared\n", name);
 		exit(1);
 	}
-	struct Gsymbol *entry = Lookup(name);
-
-	if (entry == NULL) {
-		printf("Error: Variable %s not declared\n", name);
+	elementType = local != NULL ? local->type : global->type;
+	rows = local != NULL ? local->rows : global->rows;
+	cols = local != NULL ? local->cols : global->cols;
+	isArray = local != NULL ? local->isArray : global->isArray;
+	if (!isArray || rows <= 0 || cols <= 0) {
+		fprintf(stderr, "Error: '%s' is not a two-dimensional array\n", name);
 		exit(1);
 	}
 
@@ -894,9 +923,18 @@ tnode* makeArray2DNode(char *name, tnode *rowIndex, tnode *colIndex) {
 		exit(1);
 	}
 
-	tnode *node = createTree(0, TypeCode(entry->type), NODE_ARRAY2D, name, rowIndex, colIndex, NULL);
-	node->typeEntry = entry->type;
-	node->Gentry = entry;
+	if (rowIndex->nodetype == NODE_NUM && rowIndex->val >= rows) {
+		fprintf(stderr, "Error: row index %d out of bounds (row count %d)\n", rowIndex->val, rows);
+		exit(1);
+	}
+	if (colIndex->nodetype == NODE_NUM && colIndex->val >= cols) {
+		fprintf(stderr, "Error: column index %d out of bounds (column count %d)\n", colIndex->val, cols);
+		exit(1);
+	}
+	tnode *node = createTree(0, TypeCode(elementType), NODE_ARRAY2D, name, rowIndex, colIndex, NULL);
+	node->typeEntry = elementType;
+	node->Gentry = global;
+	node->Lentry = local;
 
 	return node;
 }

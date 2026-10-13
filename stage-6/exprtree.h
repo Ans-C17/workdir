@@ -79,6 +79,7 @@ typedef struct VarList { // int a, b, c indel, oronninum oru node aayit linked l
     int size; // arrays aanel we declare value for this size
     int rows; // number of rows for 2D array
     int cols; // number of columns for 2D array
+    int isArray;
     int isPointer; // 1 if pointer, else 0
     int isFunction; // distinguishes a function declaration from a variable declaration
     struct Paramstruct* paramlist;
@@ -91,6 +92,7 @@ typedef struct Gsymbol {
     int size; // default 1, we take the value of varlist and copy it here, gtable is the collection of all varlists
     int rows;
 	int cols;
+    int isArray;
     int binding; // memory address of the variable (4099)
     struct Paramstruct* paramlist;
     int flabel;
@@ -101,6 +103,10 @@ typedef struct Lsymbol {
     char *name;
     Typetable *type;
     int binding;
+    int size;
+    int rows;
+    int cols;
+    int isArray;
     struct Lsymbol *next;
 } Lsymbol;
 
@@ -181,7 +187,7 @@ tnode* makeAddressNode(tnode *var); // creates an AST node for the address-of op
 tnode* makeDereferenceNode(tnode *ptr); // creates an AST node for dereferencing a pointer
 
 struct Gsymbol* Lookup(char* name);
-void Install(char* name, Typetable *type, int size, int rows, int cols, Paramstruct *paramlist, int flabel);
+void Install(char* name, Typetable *type, int size, int rows, int cols, int isArray, Paramstruct *paramlist, int flabel);
 void CheckFunctionDefinition(char *name, Typetable *returnType, Paramstruct *paramlist);
 Lsymbol *LLookup(char *name);
 void BeginFunctionScope(Paramstruct *paramlist);

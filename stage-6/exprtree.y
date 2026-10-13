@@ -160,10 +160,11 @@ GDecl : TypeName VarList SEMICOLON {
         }
 
         if (temp->isFunction) {
-            Install(temp->name, varType, 0, 0, 0, temp->paramlist,
+            Install(temp->name, varType, 0, 0, 0, 0, temp->paramlist,
                     nextFunctionLabel++);
         } else {
             Install(temp->name, varType, temp->size, temp->rows, temp->cols,
+                    temp->isArray,
                     NULL, -1);
         }
         temp = temp->next;
@@ -205,6 +206,7 @@ VarList : VarList ',' ID '[' NUM ']' '[' NUM ']' {
         newVar->rows = $5;
         newVar->cols = $8;
         newVar->size = $5 * $8;
+        newVar->isArray = 1;
         newVar->isPointer = 0;
         newVar->paramlist = NULL;
         newVar->next = NULL;
@@ -220,6 +222,7 @@ VarList : VarList ',' ID '[' NUM ']' '[' NUM ']' {
         newVar->rows = $3;
         newVar->cols = $6;
         newVar->size = $3 * $6;
+        newVar->isArray = 1;
         newVar->isPointer = 0;
         newVar->paramlist = NULL;
         newVar->next = NULL;
@@ -229,6 +232,8 @@ VarList : VarList ',' ID '[' NUM ']' '[' NUM ']' {
         VarList* newVar = calloc(1, sizeof(VarList));
         newVar->name = $3;
         newVar->size = $5; // array ayond size koduk
+        newVar->rows = $5;
+        newVar->isArray = 1;
         newVar->isPointer = 0;
         newVar->paramlist = NULL;
         newVar->next = NULL;
@@ -242,6 +247,8 @@ VarList : VarList ',' ID '[' NUM ']' '[' NUM ']' {
         VarList* newVar = calloc(1, sizeof(VarList));
         newVar->name = $1;
         newVar->size = $3;
+        newVar->rows = $3;
+        newVar->isArray = 1;
         newVar->isPointer = 0;
         newVar->paramlist = NULL;
         newVar->next = NULL;
@@ -368,8 +375,8 @@ Variable : ID {
     };
 
 /* Resolve every segment against the type of the preceding base expression. */
-Field : ID '.' ID {
-            $$ = makeFieldNode(makeIdNode($1), $3);
+Field : Variable '.' ID {
+            $$ = makeFieldNode($1, $3);
         }
      | Field '.' ID {
             $$ = makeFieldNode($1, $3);
@@ -452,6 +459,46 @@ IdList : IdList ',' ID {
 
         temp->next = newNode;
         $$ = $1;
+    }
+    | IdList ',' ID '[' NUM ']' {
+        VarList *newNode = calloc(1, sizeof(VarList));
+        VarList *tail = $1;
+        newNode->name = strdup($3);
+        newNode->size = $5;
+        newNode->rows = $5;
+        newNode->isArray = 1;
+        while (tail->next != NULL) tail = tail->next;
+        tail->next = newNode;
+        $$ = $1;
+    }
+    | IdList ',' ID '[' NUM ']' '[' NUM ']' {
+        VarList *newNode = calloc(1, sizeof(VarList));
+        VarList *tail = $1;
+        newNode->name = strdup($3);
+        newNode->rows = $5;
+        newNode->cols = $8;
+        newNode->size = $5 * $8;
+        newNode->isArray = 1;
+        while (tail->next != NULL) tail = tail->next;
+        tail->next = newNode;
+        $$ = $1;
+    }
+    | ID '[' NUM ']' {
+        VarList *newNode = calloc(1, sizeof(VarList));
+        newNode->name = strdup($1);
+        newNode->size = $3;
+        newNode->rows = $3;
+        newNode->isArray = 1;
+        $$ = newNode;
+    }
+    | ID '[' NUM ']' '[' NUM ']' {
+        VarList *newNode = calloc(1, sizeof(VarList));
+        newNode->name = strdup($1);
+        newNode->rows = $3;
+        newNode->cols = $6;
+        newNode->size = $3 * $6;
+        newNode->isArray = 1;
+        $$ = newNode;
     }
     | ID {
         VarList* newNode = calloc(1, sizeof(VarList));
