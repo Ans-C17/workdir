@@ -18,6 +18,6 @@ int main()
     enddecl
 
     begin
-        return(0);
+        return 0;
     end
 }
