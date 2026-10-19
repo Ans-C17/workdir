@@ -125,9 +125,11 @@ ClassMethodDeclList : ClassMethodDeclList ClassMethodDecl
 ClassMethodDecl : FType ID '(' ParamList ')' SEMICOLON
                 ;
 
-ClassMethodDefList : ClassMethodDefList FDef
-                   | FDef
+ClassMethodDefList : ClassMethodDefList ClassMethodDef
+                   | ClassMethodDef
                    ;
+/* Keep class method bodies separate from the existing global-function action. */
+ClassMethodDef : FType ID '(' ParamList ')' '{' LdeclBlock Body '}'
 
 TypeDefList : TypeDefList TypeDef
             | TypeDef
