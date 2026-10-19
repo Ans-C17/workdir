@@ -55,12 +55,17 @@ void yyerror(const char* s);
 "str" { return STR; }
 "type" { return TYPE; }
 "endtype" { return ENDTYPE; }
+"class" { return CLASS; }
+"endclass" { return ENDCLASS; }
+"self" { return SELF; }
 "NULL" { return T_NULL; }
 
 "read" { return READ; }
 "write" { return WRITE; }
 "alloc" { return ALLOC; }
 "free" { return FREE; }
+"new" { return NEW; }
+"delete" { return DELETE; }
 
 "if" { return IF; }
 "then" { return THEN; }

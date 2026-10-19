@@ -41,6 +41,7 @@ int nextFunctionLabel = 0;
 
 /* ExpL user-defined types and heap operations (semantic support is pending). */
 %token TYPE ENDTYPE ALLOC FREE
+%token CLASS ENDCLASS SELF NEW DELETE
 %token T_NULL
 
 %token T_BEGIN T_END 
@@ -59,7 +60,7 @@ int nextFunctionLabel = 0;
 // 1. terminal -> %TOKEN (with or without semantic value, declaration required)
 // 2. non terminal -> %TYPE (not required if no semantic value)
 
-%type <node> Program MainBlock Body ReturnStmt ArgList Slist Stmt InputStmt OutputStmt AsgStmt E Variable Field
+%type <node> Program MainBlock Body ReturnStmt ArgList Slist Stmt InputStmt OutputStmt AsgStmt E Variable Field FieldFunction
 %type <node> IfStmt WhileStmt
 %type <node> BreakStmt ContinueStmt
 %type <node> RepeatStmt DoWhileStmt
@@ -89,14 +90,44 @@ int nextFunctionLabel = 0;
 // if it is partially matched it shifts to next state, expecting another token
 // if it matches a complete grammar rule, it reduces it into the non terminal on the left
 // runs the yacc code block, and continues on with the reduced state
-Program : TypeDefBlock GDeclBlock FDefBlock MainBlock { $$ = $4; }
-        | TypeDefBlock GDeclBlock MainBlock           { $$ = $3; }
-        | TypeDefBlock MainBlock                      { $$ = $2; };
+Program : TypeDefBlock ClassDefBlock GDeclBlock FDefBlock MainBlock { $$ = $5; }
+        | TypeDefBlock ClassDefBlock GDeclBlock MainBlock           { $$ = $4; }
+        | TypeDefBlock ClassDefBlock MainBlock                      { $$ = $3; };
 
 /* Type-table actions from the reference grammar need a type table in this project. */
 TypeDefBlock : TYPE TypeDefList ENDTYPE
              | /* empty */
              ;
+
+/* Stage 7 class syntax. Inheritance is intentionally excluded at this stage. */
+ClassDefBlock : CLASS ClassDefList ENDCLASS
+              | /* empty */
+              ;
+
+ClassDefList : ClassDefList ClassDef
+             | ClassDef
+             ;
+
+ClassDef : ID '{' DECL ClassFieldList ClassMethodDeclList ENDDECL ClassMethodDefList '}'
+         ;
+
+ClassFieldList : ClassFieldList ClassField
+               | /* empty */
+               ;
+
+ClassField : TypeName ID SEMICOLON
+           ;
+
+ClassMethodDeclList : ClassMethodDeclList ClassMethodDecl
+                    | ClassMethodDecl
+                    ;
+
+ClassMethodDecl : FType ID '(' ParamList ')' SEMICOLON
+                ;
+
+ClassMethodDefList : ClassMethodDefList FDef
+                   | FDef
+                   ;
 
 TypeDefList : TypeDefList TypeDef
             | TypeDef
@@ -375,7 +406,10 @@ Variable : ID {
     };
 
 /* Resolve every segment against the type of the preceding base expression. */
-Field : Variable '.' ID {
+Field : SELF '.' ID {
+            $$ = makeFieldNode(makeIdNode("self"), $3);
+        }
+     | Variable '.' ID {
             $$ = makeFieldNode($1, $3);
         }
      | Field '.' ID {
@@ -586,10 +620,22 @@ Stmt : InputStmt {
     | Field ASSIGN ALLOC '(' ')' SEMICOLON {
         $$ = makeAllocNode($1);
     }
+    | Variable ASSIGN NEW '(' ID ')' SEMICOLON {
+        $$ = makeAllocNode($1);
+    }
+    | Field ASSIGN NEW '(' ID ')' SEMICOLON {
+        $$ = makeAllocNode($1);
+    }
     | FREE '(' ID ')' SEMICOLON {
         $$ = makeFreeNode(makeIdNode($3));
     }
     | FREE '(' Field ')' SEMICOLON {
+        $$ = makeFreeNode($3);
+    }
+    | DELETE '(' Variable ')' SEMICOLON {
+        $$ = makeFreeNode($3);
+    }
+    | DELETE '(' Field ')' SEMICOLON {
         $$ = makeFreeNode($3);
     };
     
@@ -703,12 +749,23 @@ E : E PLUS E {
     | Field {
         $$ = $1;
     }
+    | FieldFunction {
+        $$ = $1;
+    }
     | ID'('')' {
         $$ = makeFunctionCallNode($1, NULL);
     }
     | ID'('ArgList')' {
         $$ = makeFunctionCallNode($1, $3);
     };
+
+FieldFunction : SELF '.' ID '(' ArgList ')' { $$ = NULL; }
+              | SELF '.' ID '(' ')'         { $$ = NULL; }
+              | ID '.' ID '(' ArgList ')'   { $$ = NULL; }
+              | ID '.' ID '(' ')'           { $$ = NULL; }
+              | Field '.' ID '(' ArgList ')' { $$ = NULL; }
+              | Field '.' ID '(' ')'         { $$ = NULL; }
+              ;
 
 %%
 
