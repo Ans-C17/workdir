@@ -251,6 +251,45 @@ static int functionCall(tnode *t) {
     return resultReg;
 }
 
+/* Stage 7 has no inheritance, so a method call uses the statically resolved
+ * label stored in the class table. The receiver is the implicit self argument
+ * and must be pushed before the declared arguments. */
+static int methodCall(tnode *t) {
+    int savedTop = reg;
+    int arguments = argCount(t->arglist);
+    int receiverReg;
+    int resultReg;
+    int i;
+
+    if (t->Mentry == NULL || t->left == NULL) {
+        fprintf(stderr, "Error: method call is missing its method or receiver\n");
+        exit(1);
+    }
+
+    for (i = 0; i <= savedTop; ++i) {
+        fprintf(targetFile, "PUSH R%d\n", i);
+    }
+
+    receiverReg = codeGen(t->left);
+    fprintf(targetFile, "PUSH R%d\n", receiverReg);
+    freeReg();
+
+    pushArgs(t->arglist);
+    fprintf(targetFile, "PUSH R19\n");
+    fprintf(targetFile, "CALL F%d\n", t->Mentry->flabel);
+
+    resultReg = getReg();
+    fprintf(targetFile, "POP R%d\n", resultReg);
+    while (arguments-- > 0) {
+        fprintf(targetFile, "POP R19\n");
+    }
+    fprintf(targetFile, "POP R19\n"); /* implicit self */
+    for (i = savedTop; i >= 0; --i) {
+        fprintf(targetFile, "POP R%d\n", i);
+    }
+    return resultReg;
+}
+
 static void binary(tnode *t, const char *instruction) {
     int leftReg = codeGen(t->left);
     int rightReg = codeGen(t->right);
@@ -338,6 +377,9 @@ int codeGen(tnode *t) {
 
     case NODE_FUNCTION:
         return functionCall(t);
+
+    case NODE_METHOD_CALL:
+        return methodCall(t);
 
     case NODE_ASSIGN:
         resultReg = codeGen(t->right);
@@ -483,6 +525,7 @@ static void prologue(int localCount) {
 
 void generateProgram(FunctionAST *functions) {
     FunctionAST *function;
+    MethodAST *method;
 
     /* Header word 8 enables the runtime library used by Write/Read/Exit. */
     fprintf(targetFile, "0\n2056\n0\n0\n0\n0\n0\n1\n");
@@ -490,6 +533,17 @@ void generateProgram(FunctionAST *functions) {
     emitHeapInit();
     fprintf(targetFile, "MOV R0, 0\n");
     fprintf(targetFile, "JMP MAIN\n");
+
+    /* Methods have their own AST list and labels assigned at declaration. */
+    for (method = MethodASTHead; method != NULL; method = method->next) {
+        reg = -1;
+        loopTop = -1;
+        generatingMain = 0;
+        currentLocalCount = method->localCount;
+        fprintf(targetFile, "F%d:\n", method->methodEntry->flabel);
+        prologue(method->localCount);
+        codeGen(method->tree);
+    }
 
     for (function = functions; function != NULL; function = function->next) {
         reg = -1;
