@@ -110,7 +110,12 @@ static int lvalueAddress(tnode *t) {
         return codeGen(t->left);
     case NODE_FIELD:
         addressReg = lvalueAddress(t->left);
-        /* A user-defined value is represented by a pointer in its storage slot. */
+        /* Aggregate values (user-defined types and class objects) are stored
+         * as pointers; fields live at offsets from the pointed-to block. */
+        if (t->Fentry == NULL) {
+            fprintf(stderr, "Error: field access has no field-table entry\n");
+            exit(1);
+        }
         fprintf(targetFile, "MOV R%d, [R%d]\n", addressReg, addressReg);
         fprintf(targetFile, "ADD R%d, %d\n", addressReg, t->Fentry->fieldIndex);
         return addressReg;
@@ -257,6 +262,7 @@ static void binary(tnode *t, const char *instruction) {
 int codeGen(tnode *t) {
     int resultReg;
     int addressReg;
+    int allocationSize;
     int labelOne;
     int labelTwo;
 
@@ -342,8 +348,17 @@ int codeGen(tnode *t) {
         return -1;
 
     case NODE_ALLOC:
+        if (t->classType != NULL) {
+            /* Stage 7 class objects use a fixed eight-word member block. */
+            allocationSize = 8;
+        } else if (t->left != NULL && t->left->typeEntry != NULL) {
+            allocationSize = GetSize(t->left->typeEntry);
+        } else {
+            fprintf(stderr, "Error: allocation target has no allocatable type\n");
+            exit(1);
+        }
         resultReg = getReg();
-        emitAlloc(resultReg, resultReg - 1, GetSize(t->left->typeEntry));
+        emitAlloc(resultReg, resultReg - 1, allocationSize);
         addressReg = lvalueAddress(t->left);
         fprintf(targetFile, "MOV [R%d], R%d\n", addressReg, resultReg);
         freeReg();
