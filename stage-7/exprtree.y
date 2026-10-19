@@ -67,7 +67,6 @@ Classtable *currentClass = NULL;
 %type <node> RepeatStmt DoWhileStmt
 
 %type <type> TypeName FType FieldType
-%type <str> ClassFieldType
 %type <varlist> VarList
 %type <varlist> IdList
 %type <paramlist> ParamList
@@ -102,7 +101,7 @@ TypeDefBlock : TYPE TypeDefList ENDTYPE
              ;
 
 /* Stage 7 class syntax. Inheritance is intentionally excluded at this stage. */
-ClassDefBlock : CLASS ClassDefList ENDCLASS
+ClassDefBlock : CLASS ClassDefList ENDCLASS { PrintClassTable(); }
               | /* empty */
               ;
 
@@ -125,7 +124,29 @@ ClassFieldList : ClassFieldList ClassField
                | /* empty */
                ;
 
-ClassField : ClassFieldType ID SEMICOLON {
+ClassField : INT ID SEMICOLON {
+               if (Class_Finstall(currentClass, "int", $2) == NULL) {
+                   fprintf(stderr, "Error: field '%s %s' is invalid, duplicated, or exceeds the 8-field limit in class '%s'\n",
+                           "int", $2, currentClass == NULL ? "?" : currentClass->name);
+                   exit(1);
+               }
+           }
+           | STR ID SEMICOLON {
+               if (Class_Finstall(currentClass, "str", $2) == NULL) {
+                   fprintf(stderr, "Error: field '%s %s' is invalid, duplicated, or exceeds the 8-field limit in class '%s'\n",
+                           "str", $2, currentClass == NULL ? "?" : currentClass->name);
+                   exit(1);
+               }
+           }
+           | ID ID SEMICOLON {
+               if (TLookup($1) == NULL && CLookup($1) == NULL) {
+                   fprintf(stderr, "Error: field type '%s' is not defined before this class\n", $1);
+                   exit(1);
+               }
+               if (currentClass != NULL && CLookup($1) == currentClass) {
+                   fprintf(stderr, "Error: class fields may use only previously defined classes\n");
+                   exit(1);
+               }
                if (Class_Finstall(currentClass, $1, $2) == NULL) {
                    fprintf(stderr, "Error: field '%s %s' is invalid, duplicated, or exceeds the 8-field limit in class '%s'\n",
                            $1, $2, currentClass == NULL ? "?" : currentClass->name);
@@ -134,29 +155,52 @@ ClassField : ClassFieldType ID SEMICOLON {
            }
            ;
 
-ClassFieldType : INT { $$ = "int"; }
-               | STR { $$ = "str"; }
-               | ID {
-                   if (TLookup($1) == NULL && CLookup($1) == NULL) {
-                       fprintf(stderr, "Error: field type '%s' is not defined before this class\n", $1);
-                       exit(1);
-                   }
-                   if (currentClass != NULL && CLookup($1) == currentClass) {
-                       fprintf(stderr, "Error: class fields may use only previously defined classes\n");
-                       exit(1);
-                   }
-                   $$ = $1;
-               }
-               ;
-
 ClassMethodDeclList : ClassMethodDeclList ClassMethodDecl
                     | ClassMethodDecl
                     ;
 
-ClassMethodDecl : FType ID '(' ParamList ')' SEMICOLON {
-                    if (Class_Minstall(currentClass, $2, $1, $4) == NULL) {
+ClassMethodDecl : INT ID '(' ParamList ')' SEMICOLON {
+                    if (Class_Minstall(currentClass, $2, TLookup("int"), $4) == NULL) {
                         fprintf(stderr, "Error: method '%s' is invalid, duplicated, or exceeds the 8-method limit in class '%s'\n",
                                 $2, currentClass == NULL ? "?" : currentClass->name);
+                        exit(1);
+                    }
+                }
+                | STR ID '(' ParamList ')' SEMICOLON {
+                    if (Class_Minstall(currentClass, $2, TLookup("str"), $4) == NULL) {
+                        fprintf(stderr, "Error: method '%s' is invalid, duplicated, or exceeds the 8-method limit in class '%s'\n",
+                                $2, currentClass == NULL ? "?" : currentClass->name);
+                        exit(1);
+                    }
+                }
+                | ID ID '(' ParamList ')' SEMICOLON {
+                    Typetable *returnType = TLookup($1);
+                    if (returnType == NULL || Class_Minstall(currentClass, $2, returnType, $4) == NULL) {
+                        fprintf(stderr, "Error: method '%s' has an invalid return type or is duplicated/exceeds the 8-method limit in class '%s'\n",
+                                $2, currentClass == NULL ? "?" : currentClass->name);
+                        exit(1);
+                    }
+                }
+                | INT MUL ID '(' ParamList ')' SEMICOLON {
+                    if (Class_Minstall(currentClass, $3, PointerType(TLookup("int")), $5) == NULL) {
+                        fprintf(stderr, "Error: method '%s' is invalid, duplicated, or exceeds the 8-method limit in class '%s'\n",
+                                $3, currentClass == NULL ? "?" : currentClass->name);
+                        exit(1);
+                    }
+                }
+                | STR MUL ID '(' ParamList ')' SEMICOLON {
+                    if (Class_Minstall(currentClass, $3, PointerType(TLookup("str")), $5) == NULL) {
+                        fprintf(stderr, "Error: method '%s' is invalid, duplicated, or exceeds the 8-method limit in class '%s'\n",
+                                $3, currentClass == NULL ? "?" : currentClass->name);
+                        exit(1);
+                    }
+                }
+                | ID MUL ID '(' ParamList ')' SEMICOLON {
+                    Typetable *returnType = TLookup($1);
+                    if (returnType == NULL || !IsUserDefinedType(returnType) ||
+                        Class_Minstall(currentClass, $3, PointerType(returnType), $5) == NULL) {
+                        fprintf(stderr, "Error: method '%s' has an invalid pointer return type or is duplicated/exceeds the 8-method limit in class '%s'\n",
+                                $3, currentClass == NULL ? "?" : currentClass->name);
                         exit(1);
                     }
                 }
@@ -798,12 +842,8 @@ E : E PLUS E {
         $$ = makeFunctionCallNode($1, $3);
     };
 
-FieldFunction : SELF '.' ID '(' ArgList ')' { $$ = NULL; }
-              | SELF '.' ID '(' ')'         { $$ = NULL; }
-              | ID '.' ID '(' ArgList ')'   { $$ = NULL; }
-              | ID '.' ID '(' ')'           { $$ = NULL; }
-              | Field '.' ID '(' ArgList ')' { $$ = NULL; }
-              | Field '.' ID '(' ')'         { $$ = NULL; }
+FieldFunction : Field '(' ArgList ')' { $$ = NULL; }
+              | Field '(' ')'         { $$ = NULL; }
               ;
 
 %%

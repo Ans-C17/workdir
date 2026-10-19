@@ -283,33 +283,57 @@ void PrintClassTable(void) {
     Classtable *classEntry;
 
     printf("\nClass Table\n");
-    printf("%-18s %-12s %-12s %-12s %-12s\n",
-           "Class", "Parent", "Class index", "Fields", "Methods");
+    printf("%-20s %-20s %-12s %-10s %-10s\n",
+           "Class name", "Parent class", "Class index", "Fields", "Methods");
+    printf("%-20s %-20s %-12s %-10s %-10s\n",
+           "--------------------", "--------------------", "------------", "----------", "----------");
     for (classEntry = Chead; classEntry != NULL; classEntry = classEntry->next) {
-        Fieldlist *field;
-        Memberfunclist *method;
-        printf("%-18s %-12s %-12d %-12d %-12d\n", classEntry->name,
+        printf("%-20s %-20s %-12d %-10d %-10d\n", classEntry->name,
                classEntry->parentptr == NULL ? "NULL" : classEntry->parentptr->name,
                classEntry->classIndex, classEntry->fieldCount, classEntry->methodCount);
+    }
 
-        printf("  Member fields:\n");
+    printf("\nClass Field Table\n");
+    printf("%-20s %-12s %-24s %s\n",
+           "Class", "Field index", "Field name", "Field type");
+    printf("%-20s %-12s %-24s %s\n",
+           "--------------------", "------------", "------------------------", "----------");
+    for (classEntry = Chead; classEntry != NULL; classEntry = classEntry->next) {
+        Fieldlist *field;
         for (field = classEntry->memberfield; field != NULL; field = field->next) {
             const char *typeName = field->classType != NULL ? field->classType->name :
                                    field->type != NULL ? field->type->name : "?";
-            printf("    [%d] %-18s %s\n", field->fieldIndex, typeName, field->name);
+            printf("%-20s %-12d %-24s %s\n",
+                   classEntry->name, field->fieldIndex, field->name, typeName);
         }
+    }
 
-        printf("  Member methods:\n");
+    printf("\nClass Method Table\n");
+    printf("%-20s %-12s %-24s %-16s %-32s %s\n",
+           "Class", "Method index", "Method name", "Return type", "Parameters", "Label");
+    printf("%-20s %-12s %-24s %-16s %-32s %s\n",
+           "--------------------", "------------", "------------------------", "----------------",
+           "--------------------------------", "-----");
+    for (classEntry = Chead; classEntry != NULL; classEntry = classEntry->next) {
+        Memberfunclist *method;
         for (method = classEntry->vfuncptr; method != NULL; method = method->next) {
             Paramstruct *param;
-            printf("    [%d] %s %s(", method->funcposition,
-                   method->type->name, method->name);
+            char parameters[256] = "";
+
             for (param = method->paramlist; param != NULL; param = param->next) {
-                printf("%s%s %s", param == method->paramlist ? "" : ", ",
-                       param->type == NULL ? "?" : param->type->name,
-                       param->name == NULL ? "?" : param->name);
+                size_t used = strlen(parameters);
+                snprintf(parameters + used, sizeof(parameters) - used, "%s%s %s",
+                         used == 0 ? "" : ", ",
+                         param->type == NULL ? "?" : param->type->name,
+                         param->name == NULL ? "?" : param->name);
             }
-            printf(") F%d\n", method->flabel);
+            if (method->paramlist == NULL) {
+                strcpy(parameters, "(none)");
+            }
+            printf("%-20s %-12d %-24s %-16s %-32s F%d\n",
+                   classEntry->name, method->funcposition, method->name,
+                   method->type == NULL ? "?" : method->type->name,
+                   parameters, method->flabel);
         }
     }
 }

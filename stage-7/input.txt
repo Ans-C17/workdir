@@ -1,28 +1,28 @@
-type
-    Item {
-        int value;
+class
+    Student {
+        decl
+            int roll;
+            int getRoll();
+        enddecl
+
+        int getRoll() {
+            decl
+            enddecl
+            begin
+                return 7;
+            end
+        }
     }
-endtype
+endclass
 
-decl
-    Item items[2];
-enddecl
-
-int main()
-{
+int main() {
     decl
+        int x;
     enddecl
 
     begin
-        items[0] = alloc();
-        items[1] = alloc();
-
-        items[0].value = 17;
-        items[1].value = 25;
-
-        write(items[0].value);
-        write(items[1].value);
-
+        x = 10;
+        write(x);
         return 0;
     end
 }
