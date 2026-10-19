@@ -12,6 +12,7 @@ tnode* root;
 
 FILE* targetFile;
 int nextFunctionLabel = 0;
+Classtable *currentClass = NULL;
 %}
 
 %union{
@@ -66,6 +67,7 @@ int nextFunctionLabel = 0;
 %type <node> RepeatStmt DoWhileStmt
 
 %type <type> TypeName FType FieldType
+%type <str> ClassFieldType
 %type <varlist> VarList
 %type <varlist> IdList
 %type <paramlist> ParamList
@@ -108,21 +110,56 @@ ClassDefList : ClassDefList ClassDef
              | ClassDef
              ;
 
-ClassDef : ID '{' DECL ClassFieldList ClassMethodDeclList ENDDECL ClassMethodDefList '}'
+ClassDef : ID {
+              currentClass = CInstall($1, NULL);
+              if (currentClass == NULL) {
+                  fprintf(stderr, "Error: class '%s' is already defined or cannot be installed\n", $1);
+                  exit(1);
+              }
+          } '{' DECL ClassFieldList ClassMethodDeclList ENDDECL ClassMethodDefList '}' {
+              currentClass = NULL;
+          }
          ;
 
 ClassFieldList : ClassFieldList ClassField
                | /* empty */
                ;
 
-ClassField : TypeName ID SEMICOLON
+ClassField : ClassFieldType ID SEMICOLON {
+               if (Class_Finstall(currentClass, $1, $2) == NULL) {
+                   fprintf(stderr, "Error: field '%s %s' is invalid, duplicated, or exceeds the 8-field limit in class '%s'\n",
+                           $1, $2, currentClass == NULL ? "?" : currentClass->name);
+                   exit(1);
+               }
+           }
            ;
+
+ClassFieldType : INT { $$ = "int"; }
+               | STR { $$ = "str"; }
+               | ID {
+                   if (TLookup($1) == NULL && CLookup($1) == NULL) {
+                       fprintf(stderr, "Error: field type '%s' is not defined before this class\n", $1);
+                       exit(1);
+                   }
+                   if (currentClass != NULL && CLookup($1) == currentClass) {
+                       fprintf(stderr, "Error: class fields may use only previously defined classes\n");
+                       exit(1);
+                   }
+                   $$ = $1;
+               }
+               ;
 
 ClassMethodDeclList : ClassMethodDeclList ClassMethodDecl
                     | ClassMethodDecl
                     ;
 
-ClassMethodDecl : FType ID '(' ParamList ')' SEMICOLON
+ClassMethodDecl : FType ID '(' ParamList ')' SEMICOLON {
+                    if (Class_Minstall(currentClass, $2, $1, $4) == NULL) {
+                        fprintf(stderr, "Error: method '%s' is invalid, duplicated, or exceeds the 8-method limit in class '%s'\n",
+                                $2, currentClass == NULL ? "?" : currentClass->name);
+                        exit(1);
+                    }
+                }
                 ;
 
 ClassMethodDefList : ClassMethodDefList ClassMethodDef
