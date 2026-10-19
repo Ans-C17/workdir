@@ -1,41 +1,30 @@
-
 class
-Address {
+A {
     decl
-        int pin;
-        int getPin();
+        int get();
     enddecl
 
-    int getPin() {
+    int get() {
         decl
         enddecl
         begin
-            return 0;
-        end
-    }
-}
-
-Student {
-    decl
-        int age;
-        Address addr;
-        int getAge();
-    enddecl
-
-    int getAge() {
-        decl
-        enddecl
-        begin
-            return 0;
+            return 10;
         end
     }
 }
 endclass
 
+decl
+    A a, b;
+enddecl
+
 int main() {
     decl
     enddecl
     begin
+        a = new(A);
+        b = new(A);
+        a = b;
         return 0;
     end
 }

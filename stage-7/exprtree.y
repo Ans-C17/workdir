@@ -100,7 +100,7 @@ static void InstallGlobalVarList(VarList *variables, Typetable *type,
 // 1. terminal -> %TOKEN (with or without semantic value, declaration required)
 // 2. non terminal -> %TYPE (not required if no semantic value)
 
-%type <node> Program MainBlock Body ReturnStmt ArgList Slist Stmt InputStmt OutputStmt AsgStmt E Variable Field FieldFunction
+%type <node> Program MainBlock Body ReturnStmt ArgList Slist Stmt InputStmt OutputStmt AsgStmt E Variable Field MemberAccess FieldFunction
 %type <node> IfStmt WhileStmt
 %type <node> BreakStmt ContinueStmt
 %type <node> RepeatStmt DoWhileStmt
@@ -536,17 +536,19 @@ Variable : ID {
         $$ = makeDereferenceNode($2);
     };
 
-/* Resolve every segment against the type of the preceding base expression. */
-Field : SELF '.' ID {
-            $$ = makeFieldNode(makeIdNode("self"), $3);
-        }
-     | Variable '.' ID {
-            $$ = makeFieldNode($1, $3);
-        }
-     | Field '.' ID {
-            $$ = makeFieldNode($1, $3);
-        }
-     ;
+/* Share the member prefix so fields and method calls resolve through one path. */
+Field : MemberAccess { $$ = makeFieldValueNode($1); };
+
+MemberAccess : SELF '.' ID {
+                 $$ = makeMemberAccessNode(makeIdNode("self"), $3);
+             }
+            | Variable '.' ID {
+                 $$ = makeMemberAccessNode($1, $3);
+             }
+            | Field '.' ID {
+                 $$ = makeMemberAccessNode($1, $3);
+             }
+            ;
 
 FDefBlock : FDefBlock FDef | FDef;
 
@@ -890,8 +892,12 @@ E : E PLUS E {
         $$ = makeFunctionCallNode($1, $3);
     };
 
-FieldFunction : Field '(' ArgList ')' { $$ = NULL; }
-              | Field '(' ')'         { $$ = NULL; }
+FieldFunction : MemberAccess '(' ArgList ')' {
+                  $$ = makeMethodCallNode($1, $3);
+              }
+              | MemberAccess '(' ')' {
+                  $$ = makeMethodCallNode($1, NULL);
+              }
               ;
 
 %%

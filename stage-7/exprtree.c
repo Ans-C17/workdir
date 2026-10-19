@@ -853,11 +853,13 @@ tnode* createTree(int val, int type, int nodetype, char* varname, tnode* l, tnod
     temp->type = type;
     temp->typeEntry = TypeEntryForCode(type);
     temp->classType = NULL;
+    temp->classOwner = NULL;
     temp->nodetype = nodetype;
     temp->varname = varname;
     temp->Gentry = NULL;
     temp->Lentry = NULL;
     temp->Fentry = NULL;
+    temp->Mentry = NULL;
     temp->arglist = NULL;
     temp->left = l;
     temp->middle = m;
@@ -1346,30 +1348,145 @@ tnode* makeArray2DNode(char *name, tnode *rowIndex, tnode *colIndex) {
 	return node;
 }
 
-tnode* makeFieldNode(tnode *base, char *fieldName) {
-    Fieldlist *field;
+static int IsSelfNode(tnode *node) {
+    return node != NULL && node->nodetype == NODE_ID &&
+           node->varname != NULL && strcmp(node->varname, "self") == 0 &&
+           node->Lentry != NULL && node->Lentry->classType != NULL;
+}
+
+static int IsDirectSelfField(tnode *node) {
+    return node != NULL && node->nodetype == NODE_FIELD &&
+           node->classOwner != NULL && node->Fentry != NULL &&
+           IsSelfNode(node->left);
+}
+
+tnode* makeMemberAccessNode(tnode *base, char *memberName) {
+    Fieldlist *field = NULL;
+    Memberfunclist *method = NULL;
     tnode *node;
 
-    if (base == NULL || base->typeEntry == NULL || fieldName == NULL) {
-        fprintf(stderr, "Error: invalid field access\n");
+    if (base == NULL || memberName == NULL) {
+        fprintf(stderr, "Error: invalid member access\n");
         exit(1);
     }
 
-    if (base->typeEntry->fields == NULL) {
-        fprintf(stderr, "Error: type '%s' has no fields\n", base->typeEntry->name);
+    if (base->classType != NULL) {
+        field = Class_Flookup(base->classType, memberName);
+        method = Class_Mlookup(base->classType, memberName);
+        if (field == NULL && method == NULL) {
+            fprintf(stderr, "Error: class '%s' has no field or method named '%s'\n",
+                    base->classType->name, memberName);
+            exit(1);
+        }
+        node = createTree(0, field == NULL ? -1 : TypeCode(field->type),
+                          NODE_FIELD, memberName, base, NULL, NULL);
+        node->classOwner = base->classType;
+        node->Fentry = field;
+        node->Mentry = method;
+        if (field != NULL) {
+            node->typeEntry = field->type;
+            node->classType = field->classType;
+        }
+        return node;
+    }
+
+    if (base->typeEntry != NULL) {
+        field = FLookup(base->typeEntry, memberName);
+        if (field == NULL) {
+            fprintf(stderr, "Error: type '%s' has no field named '%s'\n",
+                    base->typeEntry->name, memberName);
+            exit(1);
+        }
+        node = createTree(0, TypeCode(field->type), NODE_FIELD,
+                          memberName, base, NULL, NULL);
+        node->typeEntry = field->type;
+        node->classType = field->classType;
+        node->Fentry = field;
+        return node;
+    }
+
+    fprintf(stderr, "Error: member access requires a value with fields or methods\n");
+    exit(1);
+}
+
+tnode* makeFieldValueNode(tnode *memberAccess) {
+    if (memberAccess == NULL || memberAccess->nodetype != NODE_FIELD ||
+        memberAccess->Fentry == NULL) {
+        fprintf(stderr, "Error: member name is not a field\n");
         exit(1);
     }
 
-    field = FLookup(base->typeEntry, fieldName);
-    if (field == NULL) {
-        fprintf(stderr, "Error: type '%s' has no field named '%s'\n",
-                base->typeEntry->name, fieldName);
+    if (memberAccess->classOwner != NULL &&
+        (activeMethodClass != memberAccess->classOwner ||
+         !IsSelfNode(memberAccess->left))) {
+        fprintf(stderr, "Error: class fields are accessible only as self.field inside their class methods\n");
+        exit(1);
+    }
+    return memberAccess;
+}
+
+tnode* makeMethodCallNode(tnode *memberAccess, tnode *arglist) {
+    Memberfunclist *method;
+    tnode *receiver;
+    tnode *actual;
+    Paramstruct *formal;
+    int position = 1;
+    tnode *node;
+    int validReceiver = 0;
+
+    if (memberAccess == NULL || memberAccess->nodetype != NODE_FIELD ||
+        memberAccess->Mentry == NULL) {
+        fprintf(stderr, "Error: member name is not a declared method\n");
+        exit(1);
+    }
+    method = memberAccess->Mentry;
+    receiver = memberAccess->left;
+
+    if (IsSelfNode(receiver)) {
+        validReceiver = activeMethodClass != NULL &&
+                        receiver->classType == activeMethodClass &&
+                        memberAccess->classOwner == activeMethodClass;
+    } else if (IsDirectSelfField(receiver)) {
+        validReceiver = activeMethodClass != NULL &&
+                        receiver->left->classType == activeMethodClass;
+    } else if (activeMethodClass == NULL && receiver != NULL &&
+               receiver->nodetype == NODE_ID && receiver->Gentry != NULL &&
+               receiver->classType != NULL) {
+        validReceiver = 1;
+    }
+    if (!validReceiver) {
+        fprintf(stderr, "Error: method call is not permitted through this receiver\n");
         exit(1);
     }
 
-    node = createTree(0, TypeCode(field->type), NODE_FIELD, fieldName,
-                      base, NULL, NULL);
-    node->typeEntry = field->type;
-    node->Fentry = field;
+    formal = method->paramlist;
+    actual = arglist;
+    while (formal != NULL && actual != NULL) {
+        tnode *argument = actual->left;
+        if (argument == NULL || argument->classType != NULL ||
+            formal->type != argument->typeEntry) {
+            fprintf(stderr, "Error: argument %d of method '%s' has the wrong type\n",
+                    position, method->name);
+            exit(1);
+        }
+        formal = formal->next;
+        actual = actual->right;
+        position++;
+    }
+    if (formal != NULL || actual != NULL) {
+        fprintf(stderr, "Error: argument count of method '%s' does not match its declaration\n",
+                method->name);
+        exit(1);
+    }
+
+    node = createTree(0, TypeCode(method->type), NODE_METHOD_CALL,
+                      method->name, receiver, NULL, NULL);
+    node->typeEntry = method->type;
+    node->Mentry = method;
+    node->arglist = arglist;
     return node;
+}
+
+tnode* makeFieldNode(tnode *base, char *fieldName) {
+    return makeFieldValueNode(makeMemberAccessNode(base, fieldName));
 }

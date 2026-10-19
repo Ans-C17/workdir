@@ -1,0 +1,24 @@
+class
+A {
+    decl
+        int get();
+        int set();
+    enddecl
+
+    int get() {
+        decl
+        enddecl
+        begin
+            return 10;
+        end
+    }
+}
+endclass
+
+int main() {
+    decl
+    enddecl
+    begin
+        return 0;
+    end
+}

@@ -40,7 +40,8 @@ enum {
     NODE_FIELD,
     NODE_NULL,
     NODE_ALLOC,
-    NODE_FREE
+    NODE_FREE,
+    NODE_METHOD_CALL
 };
 
 enum {
@@ -141,12 +142,14 @@ typedef struct tnode {
 	int type; // legacy primitive type code used by existing AST/codegen logic
     Typetable *typeEntry; // exact type identity, including user-defined types
     Classtable *classType; // class identity for self and class-valued expressions
+    Classtable *classOwner; // owner class for a class member selection
 	int val; // value of a number for NUM nodes - 5, 10
 	char* varname; // name of a variable for ID nodes - a,b,...,z
     int nodetype; // information about non-leaf nodes - read/write/connector/+/* etc
     Gsymbol* Gentry; // pointer to corresponding GST entry
     Lsymbol* Lentry; // pointer to corresponding local-symbol-table entry
     Fieldlist *Fentry; // field-table entry for a NODE_FIELD
+    Memberfunclist *Mentry; // method-table entry for a NODE_METHOD_CALL
     struct tnode *arglist; // expressions passed to a function call
     struct tnode *left, *middle, *right;
 } tnode;
@@ -236,6 +239,9 @@ void SaveMethodAST(Classtable *classEntry, Memberfunclist *methodEntry, tnode *b
 tnode* makeArrayNode(char* name, tnode* index); // for accessing array elements
 tnode* makeArray2DNode(char *name, tnode *rowIndex, tnode *colIndex);
 tnode* makeFieldNode(tnode *base, char *fieldName);
+tnode* makeMemberAccessNode(tnode *base, char *memberName);
+tnode* makeFieldValueNode(tnode *memberAccess);
+tnode* makeMethodCallNode(tnode *memberAccess, tnode *arglist);
 
 tnode* makeAddressNode(tnode *var); // creates an AST node for the address-of operator
 tnode* makeDereferenceNode(tnode *ptr); // creates an AST node for dereferencing a pointer

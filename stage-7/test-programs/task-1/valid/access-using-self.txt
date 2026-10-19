@@ -1,0 +1,24 @@
+class
+A {
+    decl
+        int value;
+        int get();
+    enddecl
+
+    int get() {
+        decl
+        enddecl
+        begin
+            return self.value;
+        end
+    }
+}
+endclass
+
+int main() {
+    decl
+    enddecl
+    begin
+        return 0;
+    end
+}

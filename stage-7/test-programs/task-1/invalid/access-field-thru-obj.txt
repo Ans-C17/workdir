@@ -1,0 +1,31 @@
+class
+A {
+    decl
+        int value;
+        int get();
+    enddecl
+
+    int get() {
+        decl
+        enddecl
+        begin
+            return self.value;
+        end
+    }
+}
+endclass
+
+decl
+    A a;
+enddecl
+
+int main() {
+    decl
+    enddecl
+    begin
+        a = new(A);
+        a.value = 25;
+        write(a.value);
+        return 0;
+    end
+}

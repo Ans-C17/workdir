@@ -1,0 +1,30 @@
+class
+A {
+    decl
+        int get();
+    enddecl
+
+    int get() {
+        decl
+        enddecl
+        begin
+            return 10;
+        end
+    }
+}
+endclass
+
+decl
+    A a, b;
+enddecl
+
+int main() {
+    decl
+    enddecl
+    begin
+        a = new(A);
+        b = new(A);
+        a = b;
+        return 0;
+    end
+}
