@@ -1,28 +1,41 @@
-class
-    Student {
-        decl
-            int roll;
-            int getRoll();
-        enddecl
 
-        int getRoll() {
-            decl
-            enddecl
-            begin
-                return 7;
-            end
-        }
+class
+Address {
+    decl
+        int pin;
+        int getPin();
+    enddecl
+
+    int getPin() {
+        decl
+        enddecl
+        begin
+            return 0;
+        end
     }
+}
+
+Student {
+    decl
+        int age;
+        Address addr;
+        int getAge();
+    enddecl
+
+    int getAge() {
+        decl
+        enddecl
+        begin
+            return 0;
+        end
+    }
+}
 endclass
 
 int main() {
     decl
-        int x;
     enddecl
-
     begin
-        x = 10;
-        write(x);
         return 0;
     end
 }

@@ -83,6 +83,7 @@ struct Memberfunclist {
     Paramstruct *paramlist;
     int funcposition;
     int flabel;
+    int isDefined;
     Memberfunclist *next;
 };
 
@@ -113,6 +114,7 @@ typedef struct VarList { // int a, b, c indel, oronninum oru node aayit linked l
 typedef struct Gsymbol {
     char *name;
     Typetable *type;
+    Classtable *classType;      // non-NULL for a global class variable
     int size; // default 1, we take the value of varlist and copy it here, gtable is the collection of all varlists
     int rows;
 	int cols;
@@ -126,6 +128,7 @@ typedef struct Gsymbol {
 typedef struct Lsymbol {
     char *name;
     Typetable *type;
+    Classtable *classType;       // non-NULL for the implicit self variable
     int binding;
     int size;
     int rows;
@@ -137,6 +140,7 @@ typedef struct Lsymbol {
 typedef struct tnode {
 	int type; // legacy primitive type code used by existing AST/codegen logic
     Typetable *typeEntry; // exact type identity, including user-defined types
+    Classtable *classType; // class identity for self and class-valued expressions
 	int val; // value of a number for NUM nodes - 5, 10
 	char* varname; // name of a variable for ID nodes - a,b,...,z
     int nodetype; // information about non-leaf nodes - read/write/connector/+/* etc
@@ -155,7 +159,17 @@ typedef struct FunctionAST {
     struct FunctionAST *next;
 } FunctionAST;
 
+typedef struct MethodAST {
+    Classtable *classEntry;
+    Memberfunclist *methodEntry;
+    tnode *tree;
+    Lsymbol *localTable;
+    int localCount;
+    struct MethodAST *next;
+} MethodAST;
+
 extern FunctionAST *FunctionASTHead;
+extern MethodAST *MethodASTHead;
 extern int nextBinding;
 extern int nextFunctionLabel;
 
@@ -179,6 +193,9 @@ Fieldlist *Class_Finstall(Classtable *classEntry, char *typeName, char *fieldNam
 Memberfunclist *Class_Minstall(Classtable *classEntry, char *name,
                                Typetable *returnType, Paramstruct *paramlist);
 Memberfunclist *Class_Mlookup(Classtable *classEntry, char *name);
+Memberfunclist *Class_MatchMethodDefinition(Classtable *classEntry, char *name,
+                                             Typetable *returnType, Paramstruct *paramlist);
+int Class_CheckMethodDefinitions(Classtable *classEntry);
 Fieldlist *Class_Flookup(Classtable *classEntry, char *name);
 void PrintClassTable(void);
 
@@ -193,6 +210,8 @@ tnode* makeIdNode(char* name);
 tnode* makeAssignNode(tnode* id, tnode* expr);
 tnode* makeAllocNode(tnode *target);
 tnode* makeFreeNode(tnode *target);
+tnode* makeClassAllocNode(tnode *target, char *className);
+tnode* makeClassDeleteNode(tnode *target);
 tnode* makeReadNode(tnode* id);
 tnode* makeWriteNode(tnode* expr);
 tnode* makeConnectorNode(tnode* l, tnode* r);
@@ -212,6 +231,7 @@ tnode* makeFunctionCallNode(char *name, tnode *arglist);
 tnode* makeArgListNode(tnode *expr);
 tnode* appendArgNode(tnode *arglist, tnode *expr);
 void SaveFunctionAST(char *name, tnode *body, int isMain);
+void SaveMethodAST(Classtable *classEntry, Memberfunclist *methodEntry, tnode *body);
 
 tnode* makeArrayNode(char* name, tnode* index); // for accessing array elements
 tnode* makeArray2DNode(char *name, tnode *rowIndex, tnode *colIndex);
@@ -222,9 +242,11 @@ tnode* makeDereferenceNode(tnode *ptr); // creates an AST node for dereferencing
 
 struct Gsymbol* Lookup(char* name);
 void Install(char* name, Typetable *type, int size, int rows, int cols, int isArray, Paramstruct *paramlist, int flabel);
+void InstallClassVariable(char *name, Classtable *classType);
 void CheckFunctionDefinition(char *name, Typetable *returnType, Paramstruct *paramlist);
 Lsymbol *LLookup(char *name);
 void BeginFunctionScope(Paramstruct *paramlist);
+void BeginMethodScope(Paramstruct *paramlist, Classtable *classEntry);
 void InstallLocalVariables(VarList *varlist, Typetable *type);
 void EndFunctionScope(void);
 void PrintLocalSymbolTable(char *functionName);

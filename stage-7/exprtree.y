@@ -13,6 +13,45 @@ tnode* root;
 FILE* targetFile;
 int nextFunctionLabel = 0;
 Classtable *currentClass = NULL;
+Memberfunclist *currentMethod = NULL;
+
+static void InstallGlobalVarList(VarList *variables, Typetable *type,
+                                 Classtable *classType) {
+    VarList *variable;
+
+    if (classType != NULL) {
+        for (variable = variables; variable != NULL; variable = variable->next) {
+            if (variable->isArray || variable->isPointer || variable->isFunction) {
+                fprintf(stderr, "Error: class variables must be scalar global variables\n");
+                exit(1);
+            }
+        }
+    }
+
+    for (variable = variables; variable != NULL; variable = variable->next) {
+        if (classType != NULL) {
+            InstallClassVariable(variable->name, classType);
+        } else {
+            Typetable *variableType = type;
+            if (variable->isPointer) {
+                variableType = PointerType(type);
+                if (variableType == NULL) {
+                    fprintf(stderr, "Error: pointer declarations are supported only for int and str\n");
+                    exit(1);
+                }
+            }
+
+            if (variable->isFunction) {
+                Install(variable->name, variableType, 0, 0, 0, 0,
+                        variable->paramlist, nextFunctionLabel++);
+            } else {
+                Install(variable->name, variableType, variable->size,
+                        variable->rows, variable->cols, variable->isArray,
+                        NULL, -1);
+            }
+        }
+    }
+}
 %}
 
 %union{
@@ -116,7 +155,11 @@ ClassDef : ID {
                   exit(1);
               }
           } '{' DECL ClassFieldList ClassMethodDeclList ENDDECL ClassMethodDefList '}' {
+              if (!Class_CheckMethodDefinitions(currentClass)) {
+                  exit(1);
+              }
               currentClass = NULL;
+              currentMethod = NULL;
           }
          ;
 
@@ -209,8 +252,21 @@ ClassMethodDecl : INT ID '(' ParamList ')' SEMICOLON {
 ClassMethodDefList : ClassMethodDefList ClassMethodDef
                    | ClassMethodDef
                    ;
-/* Keep class method bodies separate from the existing global-function action. */
-ClassMethodDef : FType ID '(' ParamList ')' '{' LdeclBlock Body '}'
+/* Method definitions are checked against their class declaration before parsing the body. */
+ClassMethodDef : FType ID '(' ParamList ')' {
+                    currentMethod = Class_MatchMethodDefinition(currentClass, $2, $1, $4);
+                    if (currentMethod == NULL) exit(1);
+                    BeginMethodScope($4, currentClass);
+                } '{' LdeclBlock Body '}' {
+                    char qualifiedName[256];
+                    snprintf(qualifiedName, sizeof(qualifiedName), "%s.%s",
+                             currentClass->name, $2);
+                    SaveMethodAST(currentClass, currentMethod,
+                                  finalizeBodyNode($9, $1, qualifiedName));
+                    PrintLocalSymbolTable(qualifiedName);
+                    EndFunctionScope();
+                    currentMethod = NULL;
+                }
 
 TypeDefList : TypeDefList TypeDef
             | TypeDef
@@ -256,34 +312,26 @@ GDeclBlock : DECL GDeclList ENDDECL | DECL ENDDECL;
 
 GDeclList : GDeclList GDecl | GDecl;
 
-GDecl : TypeName VarList SEMICOLON {
-    // if i have like 
-    // int a, b;
-    // int c, d; (in two lines)
-    // the varlist gon be like two diff linked lists, and each time reduction is done, we traverse thru
-    VarList* temp = $2;
+GDecl : INT VarList SEMICOLON {
+           InstallGlobalVarList($2, TLookup("int"), NULL);
+       }
+     | STR VarList SEMICOLON {
+           InstallGlobalVarList($2, TLookup("str"), NULL);
+       }
+     | ID VarList SEMICOLON {
+           Typetable *type = TLookup($1);
+           Classtable *classType = CLookup($1);
 
-    while (temp != NULL) {
-        Typetable *varType = $1;
-        if (temp->isPointer) {
-            varType = PointerType($1);
-            if (varType == NULL) {
-                fprintf(stderr, "Error: pointer declarations are supported only for int and str\n");
-                exit(1);
-            }
-        }
-
-        if (temp->isFunction) {
-            Install(temp->name, varType, 0, 0, 0, 0, temp->paramlist,
-                    nextFunctionLabel++);
-        } else {
-            Install(temp->name, varType, temp->size, temp->rows, temp->cols,
-                    temp->isArray,
-                    NULL, -1);
-        }
-        temp = temp->next;
-    }
-};
+           if (type != NULL && IsUserDefinedType(type)) {
+               InstallGlobalVarList($2, type, NULL);
+           } else if (classType != NULL) {
+               InstallGlobalVarList($2, NULL, classType);
+           } else {
+               fprintf(stderr, "Error: type or class '%s' is not defined\n", $1);
+               exit(1);
+           }
+       }
+     ;
 
 TypeName : INT { $$ = TLookup("int"); }
          | STR { $$ = TLookup("str"); }
@@ -704,10 +752,10 @@ Stmt : InputStmt {
         $$ = makeAllocNode($1);
     }
     | Variable ASSIGN NEW '(' ID ')' SEMICOLON {
-        $$ = makeAllocNode($1);
+        $$ = makeClassAllocNode($1, $5);
     }
     | Field ASSIGN NEW '(' ID ')' SEMICOLON {
-        $$ = makeAllocNode($1);
+        $$ = makeClassAllocNode($1, $5);
     }
     | FREE '(' ID ')' SEMICOLON {
         $$ = makeFreeNode(makeIdNode($3));
@@ -716,10 +764,10 @@ Stmt : InputStmt {
         $$ = makeFreeNode($3);
     }
     | DELETE '(' Variable ')' SEMICOLON {
-        $$ = makeFreeNode($3);
+        $$ = makeClassDeleteNode($3);
     }
     | DELETE '(' Field ')' SEMICOLON {
-        $$ = makeFreeNode($3);
+        $$ = makeClassDeleteNode($3);
     };
     
 InputStmt : READ '(' Variable ')' SEMICOLON { // u read into a var, like read(b);

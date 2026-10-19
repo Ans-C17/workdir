@@ -14,6 +14,9 @@ static Typetable *TcurrentDefinition = NULL;
 static Classtable *Chead = NULL;
 static Classtable *Ctail = NULL;
 static int nextClassIndex = 0;
+static Classtable *activeMethodClass = NULL;
+MethodAST *MethodASTHead = NULL;
+static MethodAST *methodASTTail = NULL;
 
 static Typetable *CreateTypeEntry(const char *name, int size) {
     Typetable *entry = calloc(1, sizeof(Typetable));
@@ -279,6 +282,69 @@ Memberfunclist *Class_Minstall(Classtable *classEntry, char *name,
     return method;
 }
 
+Memberfunclist *Class_MatchMethodDefinition(Classtable *classEntry, char *name,
+                                            Typetable *returnType, Paramstruct *paramlist) {
+    Memberfunclist *method = Class_Mlookup(classEntry, name);
+    Paramstruct *declared;
+    Paramstruct *defined;
+    int position = 1;
+
+    if (method == NULL) {
+        fprintf(stderr, "Error: method '%s' is defined but not declared in class '%s'\n",
+                name == NULL ? "?" : name,
+                classEntry == NULL ? "?" : classEntry->name);
+        return NULL;
+    }
+    if (method->isDefined) {
+        fprintf(stderr, "Error: method '%s' is defined more than once in class '%s'\n",
+                name, classEntry->name);
+        return NULL;
+    }
+    if (method->type != returnType) {
+        fprintf(stderr, "Error: return type of method '%s' does not match its declaration in class '%s'\n",
+                name, classEntry->name);
+        return NULL;
+    }
+
+    declared = method->paramlist;
+    defined = paramlist;
+    while (declared != NULL && defined != NULL) {
+        if (declared->type != defined->type ||
+            strcmp(declared->name, defined->name) != 0) {
+            fprintf(stderr,
+                    "Error: parameter %d of method '%s' does not match its declaration in class '%s'\n",
+                    position, name, classEntry->name);
+            return NULL;
+        }
+        declared = declared->next;
+        defined = defined->next;
+        position++;
+    }
+    if (declared != NULL || defined != NULL) {
+        fprintf(stderr, "Error: parameter count of method '%s' does not match its declaration in class '%s'\n",
+                name, classEntry->name);
+        return NULL;
+    }
+
+    method->isDefined = 1;
+    return method;
+}
+
+int Class_CheckMethodDefinitions(Classtable *classEntry) {
+    Memberfunclist *method;
+    int allDefined = 1;
+
+    if (classEntry == NULL) return 0;
+    for (method = classEntry->vfuncptr; method != NULL; method = method->next) {
+        if (!method->isDefined) {
+            fprintf(stderr, "Error: method '%s' is declared but not defined in class '%s'\n",
+                    method->name, classEntry->name);
+            allDefined = 0;
+        }
+    }
+    return allDefined;
+}
+
 void PrintClassTable(void) {
     Classtable *classEntry;
 
@@ -419,6 +485,7 @@ void Install(char *name, Typetable *type, int size, int rows, int cols, int isAr
 
     newEntry->name = strdup(name);
     newEntry->type = type;
+    newEntry->classType = NULL;
     newEntry->size = size;
     newEntry->rows = rows;
 	newEntry->cols = cols;
@@ -446,6 +513,43 @@ void Install(char *name, Typetable *type, int size, int rows, int cols, int isAr
         }
         
         temp->next = newEntry;
+    }
+}
+
+void InstallClassVariable(char *name, Classtable *classType) {
+    Gsymbol *entry;
+    Gsymbol *tail;
+
+    if (name == NULL || classType == NULL) {
+        fprintf(stderr, "Error: class variable has an undefined class type\n");
+        exit(1);
+    }
+    if (Lookup(name) != NULL) {
+        fprintf(stderr, "Error: symbol '%s' is already declared\n", name);
+        exit(1);
+    }
+
+    entry = calloc(1, sizeof(Gsymbol));
+    if (entry == NULL) {
+        fprintf(stderr, "Error: could not install class variable '%s'\n", name);
+        exit(1);
+    }
+    entry->name = strdup(name);
+    if (entry->name == NULL) {
+        free(entry);
+        fprintf(stderr, "Error: could not install class variable '%s'\n", name);
+        exit(1);
+    }
+    entry->classType = classType;
+    entry->size = 1;
+    entry->binding = nextBinding++;
+    entry->flabel = -1;
+
+    if (Ghead == NULL) Ghead = entry;
+    else {
+        tail = Ghead;
+        while (tail->next != NULL) tail = tail->next;
+        tail->next = entry;
     }
 }
 
@@ -510,11 +614,12 @@ x      INT     1    ← local
 msg    STR     2    ← local */
 
 static void LInstall(char *name, Typetable *type, int binding,
-                     int size, int rows, int cols, int isArray) {
+                     int size, int rows, int cols, int isArray,
+                     Classtable *classType) {
     Lsymbol *entry;
     Lsymbol *temp;
 
-    if (type == NULL) {
+    if (type == NULL && classType == NULL) {
         fprintf(stderr, "Error: local symbol '%s' has an undefined type\n", name);
         exit(1);
     }
@@ -526,6 +631,7 @@ static void LInstall(char *name, Typetable *type, int binding,
     entry = calloc(1, sizeof(Lsymbol));
     entry->name = strdup(name);
     entry->type = type;
+    entry->classType = classType;
     entry->binding = binding;
     entry->size = size;
     entry->rows = rows;
@@ -552,16 +658,38 @@ void BeginFunctionScope(Paramstruct *paramlist) {
     nextLocalBinding = 1;
     while (paramlist != NULL) {
         LInstall(paramlist->name, paramlist->type, parameterBinding--,
-                 1, 0, 0, 0);
+                 1, 0, 0, 0, NULL);
         paramlist = paramlist->next;
     }
+}
+
+/* self is the implicit first argument, followed by the declared parameters. */
+void BeginMethodScope(Paramstruct *paramlist, Classtable *classEntry) {
+    int parameterBinding = -3;
+    int parameterCount = 0;
+    Paramstruct *param;
+
+    if (classEntry == NULL) {
+        fprintf(stderr, "Error: cannot begin a method scope without a class\n");
+        exit(1);
+    }
+    for (param = paramlist; param != NULL; param = param->next) parameterCount++;
+    Lhead = NULL;
+    nextLocalBinding = 1;
+    LInstall("self", NULL, -(parameterCount + 3), 1, 0, 0, 0, classEntry);
+    while (paramlist != NULL) {
+        LInstall(paramlist->name, paramlist->type, parameterBinding--,
+                 1, 0, 0, 0, NULL);
+        paramlist = paramlist->next;
+    }
+    activeMethodClass = classEntry;
 }
 
 void InstallLocalVariables(VarList *varlist, Typetable *type) {
     while (varlist != NULL) {
         int size = varlist->isArray ? varlist->size : 1;
         LInstall(varlist->name, type, nextLocalBinding,
-                 size, varlist->rows, varlist->cols, varlist->isArray);
+                 size, varlist->rows, varlist->cols, varlist->isArray, NULL);
         nextLocalBinding += size;
         varlist = varlist->next;
     }
@@ -570,6 +698,7 @@ void InstallLocalVariables(VarList *varlist, Typetable *type) {
 void EndFunctionScope(void) {
     /* The AST nodes retain their Lsymbol pointers; later stages free them after codegen. */
     Lhead = NULL;
+    activeMethodClass = NULL;
 }
 
 void SaveFunctionAST(char *name, tnode *body, int isMain) {
@@ -598,8 +727,39 @@ void SaveFunctionAST(char *name, tnode *body, int isMain) {
     functionASTTail = entry;
 }
 
+void SaveMethodAST(Classtable *classEntry, Memberfunclist *methodEntry, tnode *body) {
+    MethodAST *entry = calloc(1, sizeof(MethodAST));
+    Lsymbol *local;
+
+    if (entry == NULL || classEntry == NULL || methodEntry == NULL || body == NULL) {
+        fprintf(stderr, "Error: could not save class method AST\n");
+        exit(1);
+    }
+    entry->classEntry = classEntry;
+    entry->methodEntry = methodEntry;
+    entry->tree = body;
+    entry->localTable = Lhead;
+    for (local = Lhead; local != NULL; local = local->next) {
+        if (local->binding > 0) entry->localCount += local->size;
+    }
+
+    if (MethodASTHead == NULL) MethodASTHead = entry;
+    else methodASTTail->next = entry;
+    methodASTTail = entry;
+}
+
 static const char *SymbolTypeName(Typetable *type) {
     return type == NULL ? "?" : type->name;
+}
+
+static const char *GlobalSymbolTypeName(Gsymbol *symbol) {
+    if (symbol->classType != NULL) return symbol->classType->name;
+    return SymbolTypeName(symbol->type);
+}
+
+static const char *LocalSymbolTypeName(Lsymbol *symbol) {
+    if (symbol->classType != NULL) return symbol->classType->name;
+    return SymbolTypeName(symbol->type);
 }
 
 static void PrintTableHeader(void) {
@@ -614,7 +774,7 @@ void PrintLocalSymbolTable(char *functionName) {
     PrintTableHeader();
     while (temp != NULL) {
         printf("%-16s %-10s %-8d %-10d %-24s %-14s\n",
-               temp->name, SymbolTypeName(temp->type), temp->size, temp->binding, "-", "-");
+               temp->name, LocalSymbolTypeName(temp), temp->size, temp->binding, "-", "-");
         temp = temp->next;
     }
 }
@@ -627,7 +787,7 @@ void PrintSymbolTable() {
     while (temp != NULL) {
         if (temp->flabel == -1) {
             printf("%-16s %-10s %-8d %-10d %-24s %-14s\n",
-                   temp->name, SymbolTypeName(temp->type), temp->size, temp->binding, "-", "-");
+                   temp->name, GlobalSymbolTypeName(temp), temp->size, temp->binding, "-", "-");
         } else {
             Paramstruct *param = temp->paramlist;
             char parameters[256] = "";
@@ -644,7 +804,7 @@ void PrintSymbolTable() {
             char label[16];
             snprintf(label, sizeof(label), "F%d", temp->flabel);
             printf("%-16s %-10s %-8s %-10s %-24s %-14s\n",
-                   temp->name, SymbolTypeName(temp->type), "-", "-", parameters, label);
+                   temp->name, GlobalSymbolTypeName(temp), "-", "-", parameters, label);
         }
 
         temp = temp->next;
@@ -692,6 +852,7 @@ tnode* createTree(int val, int type, int nodetype, char* varname, tnode* l, tnod
     temp->val = val;
     temp->type = type;
     temp->typeEntry = TypeEntryForCode(type);
+    temp->classType = NULL;
     temp->nodetype = nodetype;
     temp->varname = varname;
     temp->Gentry = NULL;
@@ -817,8 +978,15 @@ tnode* makeIdNode(char* name) {
     if (localEntry != NULL) {
         node = createTree(0, TypeCode(localEntry->type), NODE_ID, name, NULL, NULL, NULL);
         node->typeEntry = localEntry->type;
+        node->classType = localEntry->classType;
         node->Lentry = localEntry;
         return node;
+    }
+
+    if (activeMethodClass != NULL) {
+        fprintf(stderr, "Error: variable '%s' is not declared in method '%s'\n",
+                name, activeMethodClass->name);
+        exit(1);
     }
 
     globalEntry = Lookup(name);
@@ -833,16 +1001,30 @@ tnode* makeIdNode(char* name) {
 
     node = createTree(0, TypeCode(globalEntry->type), NODE_ID, name, NULL, NULL, NULL);
     node->typeEntry = globalEntry->type;
+    node->classType = globalEntry->classType;
     node->Gentry = globalEntry;
     return node;
 }
 
 tnode* makeAssignNode(tnode* id, tnode* expr) {
-    // rhs null avanam + lhs null avaruth + lhs field indel athu null avaruth (field = null anel athu default type aan not user-defined)
-    int nullToUserType = expr->typeEntry == TLookup("null") &&
-                         IsUserDefinedType(id->typeEntry);
+    int compatible;
 
-    if (id->typeEntry != expr->typeEntry && !nullToUserType) {
+    if (id == NULL || expr == NULL) {
+        fprintf(stderr, "Error: invalid assignment\n");
+        exit(1);
+    }
+
+    if (id->classType != NULL) {
+        compatible = expr->classType == id->classType ||
+                     (expr->classType == NULL && expr->typeEntry == TLookup("null"));
+    } else {
+        int nullToUserType = expr->typeEntry == TLookup("null") &&
+                             IsUserDefinedType(id->typeEntry);
+        compatible = expr->classType == NULL &&
+                     (id->typeEntry == expr->typeEntry || nullToUserType);
+    }
+
+    if (!compatible) {
         // eg: a = 5 > 3
         // i.e id type and rhs type same avanam
         fprintf(stderr, "Type mismatch\n");
@@ -884,6 +1066,43 @@ tnode* makeFreeNode(tnode *target) {
 
     node = createTree(0, TYPE_INT, NODE_FREE, NULL, target, NULL, NULL);
     node->typeEntry = target->typeEntry;
+    return node;
+}
+
+tnode* makeClassAllocNode(tnode *target, char *className) {
+    Classtable *requestedClass = CLookup(className);
+    tnode *node;
+
+    if (requestedClass == NULL) {
+        fprintf(stderr, "Error: class '%s' is not defined\n",
+                className == NULL ? "?" : className);
+        exit(1);
+    }
+    if (target == NULL || target->classType == NULL) {
+        fprintf(stderr, "Error: new(%s) target must be a class variable\n", className);
+        exit(1);
+    }
+    if (target->classType != requestedClass) {
+        fprintf(stderr, "Error: new(%s) does not match the target class '%s'\n",
+                className, target->classType->name);
+        exit(1);
+    }
+
+    node = createTree(0, TYPE_INT, NODE_ALLOC, NULL, target, NULL, NULL);
+    node->classType = requestedClass;
+    return node;
+}
+
+tnode* makeClassDeleteNode(tnode *target) {
+    tnode *node;
+
+    if (target == NULL || target->classType == NULL) {
+        fprintf(stderr, "Error: delete() argument must be a class variable\n");
+        exit(1);
+    }
+
+    node = createTree(0, TYPE_INT, NODE_FREE, NULL, target, NULL, NULL);
+    node->classType = target->classType;
     return node;
 }
 
@@ -978,6 +1197,11 @@ tnode* appendArgNode(tnode *arglist, tnode *expr) {
 }
 
 tnode* makeFunctionCallNode(char *name, tnode *arglist) {
+    if (activeMethodClass != NULL) {
+        fprintf(stderr, "Error: method '%s' cannot call a global function from class '%s'\n",
+                name, activeMethodClass->name);
+        exit(1);
+    }
     Gsymbol *function = Lookup(name);
     Paramstruct *formal;
     tnode *actual;
@@ -1034,6 +1258,11 @@ tnode* makeArrayNode(char* name, tnode* index) { // index is an expression E
     Typetable *elementType;
     int size, cols, isArray;
 
+    if (activeMethodClass != NULL && local == NULL) {
+        fprintf(stderr, "Error: global array '%s' is not accessible in method of class '%s'\n",
+                name, activeMethodClass->name);
+        exit(1);
+    }
     if (local == NULL && global == NULL) {
         fprintf(stderr, "Error: array '%s' is not declared\n", name);
         exit(1);
@@ -1078,7 +1307,12 @@ tnode* makeArray2DNode(char *name, tnode *rowIndex, tnode *colIndex) {
 	Typetable *elementType;
 	int rows, cols, isArray;
 
-	if (local == NULL && global == NULL) {
+    if (activeMethodClass != NULL && local == NULL) {
+        fprintf(stderr, "Error: global array '%s' is not accessible in method of class '%s'\n",
+                name, activeMethodClass->name);
+        exit(1);
+    }
+    if (local == NULL && global == NULL) {
 		fprintf(stderr, "Error: array '%s' is not declared\n", name);
 		exit(1);
 	}

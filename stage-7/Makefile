@@ -15,4 +15,4 @@ lex.yy.c: exprtree.l exprtree.tab.h
 	flex exprtree.l
 
 clean:
-	rm -f exprtree exprtree.tab.c exprtree.tab.h lex.yy.c label-translator
+	rm -f exprtree exprtree.tab.c exprtree.tab.h lex.yy.c label-translator exprtree.output
