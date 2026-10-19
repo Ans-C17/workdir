@@ -11,6 +11,9 @@ int nextLocalBinding = 1;
 static Typetable *Thead = NULL;
 static Typetable *Ttail = NULL;
 static Typetable *TcurrentDefinition = NULL;
+static Classtable *Chead = NULL;
+static Classtable *Ctail = NULL;
+static int nextClassIndex = 0;
 
 static Typetable *CreateTypeEntry(const char *name, int size) {
     Typetable *entry = calloc(1, sizeof(Typetable));
@@ -163,6 +166,152 @@ void TFinishDefinition(Typetable *type) {
     for (field = type->fields; field != NULL; field = field->next) size++;
     type->size = size;
     TcurrentDefinition = NULL;
+}
+
+Classtable *CLookup(char *name) {
+    Classtable *entry;
+    if (name == NULL) return NULL;
+    for (entry = Chead; entry != NULL; entry = entry->next) {
+        if (strcmp(entry->name, name) == 0) return entry;
+    }
+    return NULL;
+}
+
+Classtable *CInstall(char *name, char *parentClassName) {
+    Classtable *entry;
+
+    /* Stage 7 has no inheritance; callers must pass NULL for the parent. */
+    if (name == NULL || parentClassName != NULL || TLookup(name) != NULL ||
+        CLookup(name) != NULL) return NULL;
+
+    entry = calloc(1, sizeof(Classtable));
+    if (entry == NULL) return NULL;
+    entry->name = strdup(name);
+    if (entry->name == NULL) {
+        free(entry);
+        return NULL;
+    }
+    entry->parentptr = NULL;
+    entry->classIndex = nextClassIndex++;
+
+    if (Chead == NULL) Chead = entry;
+    else Ctail->next = entry;
+    Ctail = entry;
+    return entry;
+}
+
+Fieldlist *Class_Flookup(Classtable *classEntry, char *name) {
+    Fieldlist *field;
+    if (classEntry == NULL || name == NULL) return NULL;
+    for (field = classEntry->memberfield; field != NULL; field = field->next) {
+        if (strcmp(field->name, name) == 0) return field;
+    }
+    return NULL;
+}
+
+Fieldlist *Class_Finstall(Classtable *classEntry, char *typeName, char *fieldName) {
+    Fieldlist *field, *tail;
+    Typetable *fieldType;
+    Classtable *fieldClass;
+
+    if (classEntry == NULL || typeName == NULL || fieldName == NULL ||
+        classEntry->fieldCount >= 8 || Class_Flookup(classEntry, fieldName) != NULL)
+        return NULL;
+
+    fieldType = TLookup(typeName);
+    fieldClass = fieldType == NULL ? CLookup(typeName) : NULL;
+    if (fieldType == NULL && fieldClass == NULL) return NULL;
+
+    field = calloc(1, sizeof(Fieldlist));
+    if (field == NULL) return NULL;
+    field->name = strdup(fieldName);
+    if (field->name == NULL) {
+        free(field);
+        return NULL;
+    }
+    field->fieldIndex = classEntry->fieldCount++;
+    field->type = fieldType;
+    field->classType = fieldClass;
+
+    if (classEntry->memberfield == NULL) classEntry->memberfield = field;
+    else {
+        tail = classEntry->memberfield;
+        while (tail->next != NULL) tail = tail->next;
+        tail->next = field;
+    }
+    return field;
+}
+
+Memberfunclist *Class_Mlookup(Classtable *classEntry, char *name) {
+    Memberfunclist *method;
+    if (classEntry == NULL || name == NULL) return NULL;
+    for (method = classEntry->vfuncptr; method != NULL; method = method->next) {
+        if (strcmp(method->name, name) == 0) return method;
+    }
+    return NULL;
+}
+
+Memberfunclist *Class_Minstall(Classtable *classEntry, char *name,
+                               Typetable *returnType, Paramstruct *paramlist) {
+    Memberfunclist *method, *tail;
+    if (classEntry == NULL || name == NULL || returnType == NULL ||
+        classEntry->methodCount >= 8 || Class_Mlookup(classEntry, name) != NULL)
+        return NULL;
+
+    method = calloc(1, sizeof(Memberfunclist));
+    if (method == NULL) return NULL;
+    method->name = strdup(name);
+    if (method->name == NULL) {
+        free(method);
+        return NULL;
+    }
+    method->type = returnType;
+    method->paramlist = paramlist;
+    method->funcposition = classEntry->methodCount++;
+    method->flabel = nextFunctionLabel++;
+
+    if (classEntry->vfuncptr == NULL) classEntry->vfuncptr = method;
+    else {
+        tail = classEntry->vfuncptr;
+        while (tail->next != NULL) tail = tail->next;
+        tail->next = method;
+    }
+    return method;
+}
+
+void PrintClassTable(void) {
+    Classtable *classEntry;
+
+    printf("\nClass Table\n");
+    printf("%-18s %-12s %-12s %-12s %-12s\n",
+           "Class", "Parent", "Class index", "Fields", "Methods");
+    for (classEntry = Chead; classEntry != NULL; classEntry = classEntry->next) {
+        Fieldlist *field;
+        Memberfunclist *method;
+        printf("%-18s %-12s %-12d %-12d %-12d\n", classEntry->name,
+               classEntry->parentptr == NULL ? "NULL" : classEntry->parentptr->name,
+               classEntry->classIndex, classEntry->fieldCount, classEntry->methodCount);
+
+        printf("  Member fields:\n");
+        for (field = classEntry->memberfield; field != NULL; field = field->next) {
+            const char *typeName = field->classType != NULL ? field->classType->name :
+                                   field->type != NULL ? field->type->name : "?";
+            printf("    [%d] %-18s %s\n", field->fieldIndex, typeName, field->name);
+        }
+
+        printf("  Member methods:\n");
+        for (method = classEntry->vfuncptr; method != NULL; method = method->next) {
+            Paramstruct *param;
+            printf("    [%d] %s %s(", method->funcposition,
+                   method->type->name, method->name);
+            for (param = method->paramlist; param != NULL; param = param->next) {
+                printf("%s%s %s", param == method->paramlist ? "" : ", ",
+                       param->type == NULL ? "?" : param->type->name,
+                       param->name == NULL ? "?" : param->name);
+            }
+            printf(") F%d\n", method->flabel);
+        }
+    }
 }
 
 Fieldlist *FLookup(Typetable *type, char *name) {

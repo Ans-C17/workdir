@@ -60,10 +60,14 @@ typedef struct Typetable {
     struct Typetable *next;
 } Typetable;
 
+typedef struct Classtable Classtable;
+typedef struct Memberfunclist Memberfunclist;
+
 typedef struct Fieldlist {
     char *name;                 // field name
     int fieldIndex;             // position in the containing type
-    Typetable *type;             // declared type of this field
+    Typetable *type;            // declared type-table type, if any
+    Classtable *classType;      // declared class type, if any
     struct Fieldlist *next;
 } Fieldlist;
 
@@ -72,6 +76,26 @@ typedef struct Paramstruct {
     Typetable *type;
     struct Paramstruct* next;
 } Paramstruct;
+
+struct Memberfunclist {
+    char *name;
+    Typetable *type;            // method return type
+    Paramstruct *paramlist;
+    int funcposition;
+    int flabel;
+    Memberfunclist *next;
+};
+
+struct Classtable {
+    char *name;
+    Fieldlist *memberfield;
+    Memberfunclist *vfuncptr;
+    Classtable *parentptr;      // NULL in stage 7; inheritance comes in stage 8
+    int classIndex;
+    int fieldCount;
+    int methodCount;
+    Classtable *next;
+};
 
 typedef struct VarList { // int a, b, c indel, oronninum oru node aayit linked list aakan
     // install() vilikumbo ivarellarum gsymbol tableilek povum
@@ -133,6 +157,7 @@ typedef struct FunctionAST {
 
 extern FunctionAST *FunctionASTHead;
 extern int nextBinding;
+extern int nextFunctionLabel;
 
 void TypeTableCreate(void);
 Typetable *TLookup(char *name);
@@ -147,6 +172,15 @@ Typetable *TBeginDefinition(char *name);
 Typetable *TCurrentDefinition(void);
 Fieldlist *FInstall(Typetable *owner, char *name, Typetable *fieldType, int fieldIndex);
 void TFinishDefinition(Typetable *type);
+
+Classtable *CInstall(char *name, char *parentClassName);
+Classtable *CLookup(char *name);
+Fieldlist *Class_Finstall(Classtable *classEntry, char *typeName, char *fieldName);
+Memberfunclist *Class_Minstall(Classtable *classEntry, char *name,
+                               Typetable *returnType, Paramstruct *paramlist);
+Memberfunclist *Class_Mlookup(Classtable *classEntry, char *name);
+Fieldlist *Class_Flookup(Classtable *classEntry, char *name);
+void PrintClassTable(void);
 
 tnode* createTree(int val, int type, int nodetype, char* varname, tnode* l, tnode* m, tnode* r);
 
