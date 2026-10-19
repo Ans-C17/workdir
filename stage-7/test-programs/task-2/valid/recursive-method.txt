@@ -1,0 +1,39 @@
+class
+A {
+decl
+    int sum(int n);
+enddecl
+
+int sum(int n)
+{
+    decl
+        int result;
+    enddecl
+    begin
+        if (n <= 0) then
+            result = 0;
+        else
+            result = n + self.sum(n - 1);
+        endif;
+        return result;
+    end
+}
+}
+endclass
+
+decl
+    A a;
+    int r;
+enddecl
+
+int main()
+{
+    decl
+    enddecl
+    begin
+        a = new(A);
+        r = a.sum(5);
+        write(r);
+        return 0;
+    end
+}

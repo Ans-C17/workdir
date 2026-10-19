@@ -1,0 +1,150 @@
+type
+    bst {
+        int a;
+        bst left;
+        bst right;
+    }
+endtype
+
+class
+bstclass {
+    decl
+        bst root;
+        int init();
+        bst getroot();
+        int setroot(bst n1);
+        bst getnode(int key);
+        bst insert(bst h, int key);
+        int inOrderfun(bst h);
+        int preOrderfun(bst h);
+        int postOrderfun(bst h);
+    enddecl
+
+    int init() {
+        decl
+        enddecl
+        begin
+            self.root = NULL;
+            return 1;
+        end
+    }
+
+    bst getroot() {
+        decl
+        enddecl
+        begin
+            return self.root;
+        end
+    }
+
+    int setroot(bst n1) {
+        decl
+        enddecl
+        begin
+            self.root = n1;
+            return 1;
+        end
+    }
+
+    bst getnode(int key) {
+        decl
+            bst temp;
+        enddecl
+        begin
+            temp = alloc();
+            temp.a = key;
+            temp.left = NULL;
+            temp.right = NULL;
+            return temp;
+        end
+    }
+
+    bst insert(bst h, int key) {
+        decl
+        enddecl
+        begin
+            if (h == NULL) then
+                h = self.getnode(key);
+            else
+                if (key < h.a) then
+                    h.left = self.insert(h.left, key);
+                else
+                    if (key > h.a) then
+                        h.right = self.insert(h.right, key);
+                    endif;
+                endif;
+            endif;
+            return h;
+        end
+    }
+
+    int inOrderfun(bst h) {
+        decl
+            int ignored;
+        enddecl
+        begin
+            if (h != NULL) then
+                ignored = self.inOrderfun(h.left);
+                write(h.a);
+                ignored = self.inOrderfun(h.right);
+            endif;
+            return 1;
+        end
+    }
+
+    int preOrderfun(bst h) {
+        decl
+            int ignored;
+        enddecl
+        begin
+            if (h != NULL) then
+                write(h.a);
+                ignored = self.preOrderfun(h.left);
+                ignored = self.preOrderfun(h.right);
+            endif;
+            return 1;
+        end
+    }
+
+    int postOrderfun(bst h) {
+        decl
+            int ignored;
+        enddecl
+        begin
+            if (h != NULL) then
+                ignored = self.postOrderfun(h.left);
+                ignored = self.postOrderfun(h.right);
+                write(h.a);
+            endif;
+            return 1;
+        end
+    }
+}
+endclass
+
+decl
+    bstclass obj;
+enddecl
+
+int main() {
+    decl
+        bst Root;
+        int x, ignored, val;
+    enddecl
+    begin
+        obj = new(bstclass);
+        x = obj.init();
+        read(val);
+        Root = obj.getroot();
+        while (val != 0) do
+            Root = obj.insert(Root, val);
+            read(val);
+        endwhile;
+        x = obj.setroot(Root);
+        ignored = obj.inOrderfun(obj.getroot());
+        ignored = obj.preOrderfun(obj.getroot());
+        ignored = obj.postOrderfun(obj.getroot());
+        delete(obj);
+        return 0;
+    end
+}

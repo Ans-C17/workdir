@@ -1,0 +1,73 @@
+class
+Inner {
+decl
+    int x;
+    int setX(int n);
+    int getX();
+enddecl
+
+int setX(int n)
+{
+    decl
+    enddecl
+    begin
+        self.x = n;
+        return 0;
+    end
+}
+
+int getX()
+{
+    decl
+    enddecl
+    begin
+        return self.x;
+    end
+}
+}
+
+Outer {
+decl
+    Inner child;
+    int setChildX(int n);
+    int getChildX();
+enddecl
+
+int setChildX(int n)
+{
+    decl
+    enddecl
+    begin
+        self.child = new(Inner);
+        return self.child.setX(n);
+    end
+}
+
+int getChildX()
+{
+    decl
+    enddecl
+    begin
+        return self.child.getX();
+    end
+}
+}
+endclass
+
+decl
+    Outer o;
+    int r;
+enddecl
+
+int main()
+{
+    decl
+    enddecl
+    begin
+        o = new(Outer);
+        r = o.setChildX(77);
+        r = o.getChildX();
+        write(r);
+        return 0;
+    end
+}

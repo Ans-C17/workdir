@@ -1,0 +1,48 @@
+class
+A {
+decl
+    int x;
+    int y;
+    int setValues(int a, int b);
+    int getSum();
+enddecl
+
+int setValues(int a, int b)
+{
+    decl
+    enddecl
+    begin
+        self.x = a;
+        self.y = b;
+        return 0;
+    end
+}
+
+int getSum()
+{
+    decl
+    enddecl
+    begin
+        return self.x + self.y;
+    end
+}
+}
+endclass
+
+decl
+    A a;
+    int result;
+enddecl
+
+int main()
+{
+    decl
+    enddecl
+    begin
+        a = new(A);
+        result = a.setValues(10, 20);
+        result = a.getSum();
+        write(result);
+        return 0;
+    end
+}
