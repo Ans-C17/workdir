@@ -1,61 +1,56 @@
 class
-fact {
+A {
     decl
         int x;
-        int findfactorial(int n);
+        int setX(int n);
+        int getX();
     enddecl
 
-    int findfactorial(int n) {
+    int setX(int n)
+    {
         decl
-            int p;
         enddecl
         begin
-            if (n <= 1) then
-                p = 1;
-            else
-                p = n * self.findfactorial(n - 1);
-            endif;
-            return p;
+            self.x = n;
+            return 0;
         end
     }
-}
 
-testfactsum {
-    decl
-        fact o1;
-        int testfun(int n);
-    enddecl
-
-    int testfun(int n) {
+    int getX()
+    {
         decl
-            int sum;
         enddecl
         begin
-            self.o1 = new(fact);
-            sum = 0;
-            while (n != 0) do
-                sum = sum + self.o1.findfactorial(n);
-                n = n - 1;
-            endwhile;
-            return sum;
+            return self.x;
         end
     }
 }
 endclass
 
 decl
-    testfactsum obj;
+    A a;
+    int result;
+    int readValue(A obj);
 enddecl
 
-int main() {
+int readValue(A obj)
+{
     decl
-        int n;
     enddecl
     begin
-        obj = new(testfactsum);
-        read(n);
-        write(obj.testfun(n));
-        delete(obj);
-        return 1;
+        return obj.getX();
+    end
+}
+
+int main()
+{
+    decl
+    enddecl
+    begin
+        a = new(A);
+        result = a.setX(42);
+        result = readValue(a);
+        write(result);
+        return 0;
     end
 }

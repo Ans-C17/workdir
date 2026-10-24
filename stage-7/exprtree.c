@@ -310,6 +310,7 @@ Memberfunclist *Class_MatchMethodDefinition(Classtable *classEntry, char *name,
     defined = paramlist;
     while (declared != NULL && defined != NULL) {
         if (declared->type != defined->type ||
+            declared->classType != defined->classType ||
             strcmp(declared->name, defined->name) != 0) {
             fprintf(stderr,
                     "Error: parameter %d of method '%s' does not match its declaration in class '%s'\n",
@@ -390,7 +391,8 @@ void PrintClassTable(void) {
                 size_t used = strlen(parameters);
                 snprintf(parameters + used, sizeof(parameters) - used, "%s%s %s",
                          used == 0 ? "" : ", ",
-                         param->type == NULL ? "?" : param->type->name,
+                         param->classType != NULL ? param->classType->name :
+                         param->type != NULL ? param->type->name : "?",
                          param->name == NULL ? "?" : param->name);
             }
             if (method->paramlist == NULL) {
@@ -577,6 +579,7 @@ void CheckFunctionDefinition(char *name, Typetable *returnType, Paramstruct *par
     defined = paramlist;
     while (declared != NULL && defined != NULL) {
         if (declared->type != defined->type ||
+            declared->classType != defined->classType ||
             strcmp(declared->name, defined->name) != 0) {
             fprintf(stderr,
                     "Error: parameter %d of function '%s' does not match its declaration\n",
@@ -658,7 +661,7 @@ void BeginFunctionScope(Paramstruct *paramlist) {
     nextLocalBinding = 1;
     while (paramlist != NULL) {
         LInstall(paramlist->name, paramlist->type, parameterBinding--,
-                 1, 0, 0, 0, NULL);
+                 1, 0, 0, 0, paramlist->classType);
         paramlist = paramlist->next;
     }
 }
@@ -679,7 +682,7 @@ void BeginMethodScope(Paramstruct *paramlist, Classtable *classEntry) {
     LInstall("self", NULL, -(parameterCount + 3), 1, 0, 0, 0, classEntry);
     while (paramlist != NULL) {
         LInstall(paramlist->name, paramlist->type, parameterBinding--,
-                 1, 0, 0, 0, NULL);
+                 1, 0, 0, 0, paramlist->classType);
         paramlist = paramlist->next;
     }
     activeMethodClass = classEntry;
@@ -762,6 +765,11 @@ static const char *LocalSymbolTypeName(Lsymbol *symbol) {
     return SymbolTypeName(symbol->type);
 }
 
+static const char *ParameterTypeName(Paramstruct *parameter) {
+    if (parameter->classType != NULL) return parameter->classType->name;
+    return SymbolTypeName(parameter->type);
+}
+
 static void PrintTableHeader(void) {
     printf("%-16s %-10s %-8s %-10s %-24s %-14s\n",
            "Name", "Type", "Size", "Binding", "Parameters", "Function label");
@@ -797,7 +805,7 @@ void PrintSymbolTable() {
                 while (param != NULL) {
                     size_t used = strlen(parameters);
                     snprintf(parameters + used, sizeof(parameters) - used, "%s%s %s",
-                             used == 0 ? "" : ", ", SymbolTypeName(param->type), param->name);
+                             used == 0 ? "" : ", ", ParameterTypeName(param), param->name);
                     param = param->next;
                 }
             }
@@ -1198,6 +1206,19 @@ tnode* appendArgNode(tnode *arglist, tnode *expr) {
     return arglist;
 }
 
+static int ArgumentMatchesParameter(Paramstruct *parameter, tnode *argument) {
+    if (parameter == NULL || argument == NULL) return 0;
+
+    if (parameter->classType != NULL) {
+        return argument->classType == parameter->classType ||
+               (argument->classType == NULL &&
+                argument->typeEntry == TLookup("null"));
+    }
+
+    return argument->classType == NULL &&
+           parameter->type == argument->typeEntry;
+}
+
 tnode* makeFunctionCallNode(char *name, tnode *arglist) {
     if (activeMethodClass != NULL) {
         fprintf(stderr, "Error: method '%s' cannot call a global function from class '%s'\n",
@@ -1222,7 +1243,7 @@ tnode* makeFunctionCallNode(char *name, tnode *arglist) {
     formal = function->paramlist;
     actual = arglist;
     while (formal != NULL && actual != NULL) {
-        if (formal->type != actual->left->typeEntry) {
+        if (!ArgumentMatchesParameter(formal, actual->left)) {
             fprintf(stderr, "Error: argument %d of '%s' has the wrong type\n",
                     position, name);
             exit(1);
@@ -1450,8 +1471,8 @@ tnode* makeMethodCallNode(tnode *memberAccess, tnode *arglist) {
         validReceiver = activeMethodClass != NULL &&
                         receiver->left->classType == activeMethodClass;
     } else if (activeMethodClass == NULL && receiver != NULL &&
-               receiver->nodetype == NODE_ID && receiver->Gentry != NULL &&
-               receiver->classType != NULL) {
+               receiver->nodetype == NODE_ID && receiver->classType != NULL &&
+               (receiver->Gentry != NULL || receiver->Lentry != NULL)) {
         validReceiver = 1;
     }
     if (!validReceiver) {
@@ -1463,8 +1484,7 @@ tnode* makeMethodCallNode(tnode *memberAccess, tnode *arglist) {
     actual = arglist;
     while (formal != NULL && actual != NULL) {
         tnode *argument = actual->left;
-        if (argument == NULL || argument->classType != NULL ||
-            formal->type != argument->typeEntry) {
+        if (!ArgumentMatchesParameter(formal, argument)) {
             fprintf(stderr, "Error: argument %d of method '%s' has the wrong type\n",
                     position, method->name);
             exit(1);

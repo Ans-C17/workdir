@@ -61,6 +61,7 @@ static void InstallGlobalVarList(VarList *variables, Typetable *type,
     VarList* varlist;
     Paramstruct* paramlist;
     Typetable* type;
+    ParamTypeInfo paramtype;
 }
 
 // we do SYNTAX ANALYSIS here - checking if the syntax is right like ID ASSIGN E SEMICOLON
@@ -106,6 +107,7 @@ static void InstallGlobalVarList(VarList *variables, Typetable *type,
 %type <node> RepeatStmt DoWhileStmt
 
 %type <type> TypeName FType FieldType
+%type <paramtype> ParamType
 %type <varlist> VarList
 %type <varlist> IdList
 %type <paramlist> ParamList
@@ -578,20 +580,26 @@ ParamList : ParamList ',' Param {
         $$ = NULL;
     };
 
-Param : TypeName ID {
-        Paramstruct *p = malloc(sizeof(Paramstruct));
+Param : ParamType ID {
+        Paramstruct *p = calloc(1, sizeof(Paramstruct));
+
+        if ($1.type == NULL && $1.classType == NULL) {
+            fprintf(stderr, "Error: parameter type is not defined\n");
+            exit(1);
+        }
 
         p->name = $2;
-        p->type = $1;
+        p->type = $1.type;
+        p->classType = $1.classType;
         p->next = NULL;
 
         $$ = p;
     }
-    | TypeName MUL ID {
-        Paramstruct *p = malloc(sizeof(Paramstruct));
+    | ParamType MUL ID {
+        Paramstruct *p = calloc(1, sizeof(Paramstruct));
 
         p->name = $3;
-        p->type = PointerType($1);
+        p->type = PointerType($1.type);
         if (p->type == NULL) {
             fprintf(stderr, "Error: pointer parameters are supported only for int and str\n");
             exit(1);
@@ -599,6 +607,28 @@ Param : TypeName ID {
         p->next = NULL;
         $$ = p;
     };
+
+ParamType : INT {
+              $$.type = TLookup("int");
+              $$.classType = NULL;
+          }
+          | STR {
+              $$.type = TLookup("str");
+              $$.classType = NULL;
+          }
+          | ID {
+              Typetable *type = TLookup($1);
+              Classtable *classType = CLookup($1);
+
+              if (type != NULL && IsUserDefinedType(type)) {
+                  $$.type = type;
+                  $$.classType = NULL;
+              } else {
+                  $$.type = NULL;
+                  $$.classType = classType;
+              }
+          }
+          ;
 
 LdeclBlock : DECL LDecList ENDDECL | DECL ENDDECL;
 

@@ -64,6 +64,11 @@ typedef struct Typetable {
 typedef struct Classtable Classtable;
 typedef struct Memberfunclist Memberfunclist;
 
+typedef struct ParamTypeInfo {
+    Typetable *type;
+    Classtable *classType;
+} ParamTypeInfo;
+
 typedef struct Fieldlist {
     char *name;                 // field name
     int fieldIndex;             // position in the containing type
@@ -75,6 +80,7 @@ typedef struct Fieldlist {
 typedef struct Paramstruct {
     char* name;
     Typetable *type;
+    Classtable *classType;
     struct Paramstruct* next;
 } Paramstruct;
 
