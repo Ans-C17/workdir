@@ -1,0 +1,56 @@
+class
+A {
+    decl
+        int x;
+        int setX(int n);
+        int getX();
+    enddecl
+
+    int setX(int n)
+    {
+        decl
+        enddecl
+        begin
+            self.x = n;
+            return 0;
+        end
+    }
+
+    int getX()
+    {
+        decl
+        enddecl
+        begin
+            return self.x;
+        end
+    }
+}
+endclass
+
+decl
+    int result;
+    int test();
+enddecl
+
+int test()
+{
+    decl
+        A obj;
+    enddecl
+    begin
+        obj = new(A);
+        result = obj.setX(42);
+        return obj.getX();
+    end
+}
+
+int main()
+{
+    decl
+    enddecl
+    begin
+        result = test();
+        write(result);
+        return 0;
+    end
+}
