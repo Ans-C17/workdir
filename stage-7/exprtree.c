@@ -698,6 +698,25 @@ void InstallLocalVariables(VarList *varlist, Typetable *type) {
     }
 }
 
+void InstallLocalClassVariables(VarList *varlist, Classtable *classType) {
+    if (classType == NULL) {
+        fprintf(stderr, "Error: local variable has an undefined class type\n");
+        exit(1);
+    }
+
+    while (varlist != NULL) {
+        if (varlist->isArray || varlist->isPointer || varlist->isFunction) {
+            fprintf(stderr,
+                    "Error: local class variables must be scalar values\n");
+            exit(1);
+        }
+        LInstall(varlist->name, NULL, nextLocalBinding,
+                 1, 0, 0, 0, classType);
+        nextLocalBinding++;
+        varlist = varlist->next;
+    }
+}
+
 void EndFunctionScope(void) {
     /* The AST nodes retain their Lsymbol pointers; later stages free them after codegen. */
     Lhead = NULL;

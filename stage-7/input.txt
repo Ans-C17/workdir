@@ -28,16 +28,18 @@ A {
 endclass
 
 decl
-    A a;
     int result;
-    int readValue(A obj);
+    int test();
 enddecl
 
-int readValue(A obj)
+int test()
 {
     decl
+        A obj;
     enddecl
     begin
+        obj = new(A);
+        result = obj.setX(42);
         return obj.getX();
     end
 }
@@ -47,9 +49,7 @@ int main()
     decl
     enddecl
     begin
-        a = new(A);
-        result = a.setX(42);
-        result = readValue(a);
+        result = test();
         write(result);
         return 0;
     end

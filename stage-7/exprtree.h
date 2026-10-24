@@ -135,7 +135,7 @@ typedef struct Gsymbol {
 typedef struct Lsymbol {
     char *name;
     Typetable *type;
-    Classtable *classType;       // non-NULL for the implicit self variable
+    Classtable *classType;       // non-NULL for class-typed locals, parameters, or self
     int binding;
     int size;
     int rows;
@@ -260,6 +260,7 @@ Lsymbol *LLookup(char *name);
 void BeginFunctionScope(Paramstruct *paramlist);
 void BeginMethodScope(Paramstruct *paramlist, Classtable *classEntry);
 void InstallLocalVariables(VarList *varlist, Typetable *type);
+void InstallLocalClassVariables(VarList *varlist, Classtable *classType);
 void EndFunctionScope(void);
 void PrintLocalSymbolTable(char *functionName);
 void PrintSymbolTable();

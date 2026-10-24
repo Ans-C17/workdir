@@ -107,7 +107,7 @@ static void InstallGlobalVarList(VarList *variables, Typetable *type,
 %type <node> RepeatStmt DoWhileStmt
 
 %type <type> TypeName FType FieldType
-%type <paramtype> ParamType
+%type <paramtype> ParamType LocalType
 %type <varlist> VarList
 %type <varlist> IdList
 %type <paramlist> ParamList
@@ -634,9 +634,18 @@ LdeclBlock : DECL LDecList ENDDECL | DECL ENDDECL;
 
 LDecList : LDecList LDecl | LDecl;
 
-LDecl : TypeName IdList SEMICOLON {
-        InstallLocalVariables($2, $1);
+LDecl : LocalType IdList SEMICOLON {
+        if ($1.classType != NULL) {
+            InstallLocalClassVariables($2, $1.classType);
+        } else if ($1.type == NULL) {
+            fprintf(stderr, "Error: local variable type is not defined\n");
+            exit(1);
+        } else {
+            InstallLocalVariables($2, $1.type);
+        }
     };
+
+LocalType : ParamType { $$ = $1; };
 
 IdList : IdList ',' ID {
         VarList* newNode = calloc(1, sizeof(VarList));
