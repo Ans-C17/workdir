@@ -1,56 +1,39 @@
 class
 A {
+decl
+    int sum(int n);
+enddecl
+
+int sum(int n)
+{
     decl
-        int x;
-        int setX(int n);
-        int getX();
+        int result;
     enddecl
-
-    int setX(int n)
-    {
-        decl
-        enddecl
-        begin
-            self.x = n;
-            return 0;
-        end
-    }
-
-    int getX()
-    {
-        decl
-        enddecl
-        begin
-            return self.x;
-        end
-    }
+    begin
+        if (n <= 0) then
+            result = 0;
+        else
+            result = n + self.sum(n - 1);
+        endif;
+        return result;
+    end
+}
 }
 endclass
 
 decl
-    int result;
-    int test();
+    A a;
+    int r;
 enddecl
-
-int test()
-{
-    decl
-        A obj;
-    enddecl
-    begin
-        obj = new(A);
-        result = obj.setX(42);
-        return obj.getX();
-    end
-}
 
 int main()
 {
     decl
     enddecl
     begin
-        result = test();
-        write(result);
+        a = new(A);
+        r = a.sum(5);
+        write(r);
         return 0;
     end
 }

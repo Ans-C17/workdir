@@ -52,6 +52,14 @@ static void InstallGlobalVarList(VarList *variables, Typetable *type,
         }
     }
 }
+
+static void CheckClassFieldOrder(void) {
+    if (currentClass != NULL && currentClass->methodCount != 0) {
+        fprintf(stderr, "Error: class fields must be declared before methods in class '%s'\n",
+                currentClass->name);
+        exit(1);
+    }
+}
 %}
 
 %union{
@@ -141,7 +149,7 @@ TypeDefBlock : TYPE TypeDefList ENDTYPE
              | /* empty */
              ;
 
-/* Stage 7 class syntax. Inheritance is intentionally excluded at this stage. */
+/* Class syntax. Inheritance is intentionally excluded at this stage. */
 ClassDefBlock : CLASS ClassDefList ENDCLASS { PrintClassTable(); }
               | /* empty */
               ;
@@ -156,7 +164,7 @@ ClassDef : ID {
                   fprintf(stderr, "Error: class '%s' is already defined or cannot be installed\n", $1);
                   exit(1);
               }
-          } '{' DECL ClassFieldList ClassMethodDeclList ENDDECL ClassMethodDefList '}' {
+          } '{' DECL ClassMemberDecls ENDDECL ClassMethodDefList '}' {
               if (!Class_CheckMethodDefinitions(currentClass)) {
                   exit(1);
               }
@@ -165,11 +173,15 @@ ClassDef : ID {
           }
          ;
 
-ClassFieldList : ClassFieldList ClassField
-               | /* empty */
-               ;
+/* One shared list avoids adjacent nullable field/method lists. The field
+   actions below enforce the required fields-before-methods order. */
+ClassMemberDecls : ClassMemberDecls ClassField
+                 | ClassMemberDecls ClassMethodDecl
+                 | /* empty */
+                 ;
 
 ClassField : INT ID SEMICOLON {
+               CheckClassFieldOrder();
                if (Class_Finstall(currentClass, "int", $2) == NULL) {
                    fprintf(stderr, "Error: field '%s %s' is invalid, duplicated, or exceeds the 8-field limit in class '%s'\n",
                            "int", $2, currentClass == NULL ? "?" : currentClass->name);
@@ -177,6 +189,7 @@ ClassField : INT ID SEMICOLON {
                }
            }
            | STR ID SEMICOLON {
+               CheckClassFieldOrder();
                if (Class_Finstall(currentClass, "str", $2) == NULL) {
                    fprintf(stderr, "Error: field '%s %s' is invalid, duplicated, or exceeds the 8-field limit in class '%s'\n",
                            "str", $2, currentClass == NULL ? "?" : currentClass->name);
@@ -184,6 +197,7 @@ ClassField : INT ID SEMICOLON {
                }
            }
            | ID ID SEMICOLON {
+               CheckClassFieldOrder();
                if (TLookup($1) == NULL && CLookup($1) == NULL) {
                    fprintf(stderr, "Error: field type '%s' is not defined before this class\n", $1);
                    exit(1);
@@ -199,10 +213,6 @@ ClassField : INT ID SEMICOLON {
                }
            }
            ;
-
-ClassMethodDeclList : ClassMethodDeclList ClassMethodDecl
-                    | ClassMethodDecl
-                    ;
 
 ClassMethodDecl : INT ID '(' ParamList ')' SEMICOLON {
                     if (Class_Minstall(currentClass, $2, TLookup("int"), $4) == NULL) {
@@ -251,8 +261,8 @@ ClassMethodDecl : INT ID '(' ParamList ')' SEMICOLON {
                 }
                 ;
 
-ClassMethodDefList : ClassMethodDefList ClassMethodDef
-                   | ClassMethodDef
+ClassMethodDefList : ClassMethodDef ClassMethodDefList
+                   | /* empty */
                    ;
 /* Method definitions are checked against their class declaration before parsing the body. */
 ClassMethodDef : FType ID '(' ParamList ')' {
