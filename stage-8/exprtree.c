@@ -180,6 +180,14 @@ Classtable *CLookup(char *name) {
     return NULL;
 }
 
+static int IsSameOrDerivedClass(Classtable *candidate, Classtable *expected) {
+    while (candidate != NULL) {
+        if (candidate == expected) return 1;
+        candidate = candidate->parentptr;
+    }
+    return 0;
+}
+
 static Paramstruct *CloneClassParams(Paramstruct *source) {
     Paramstruct *head = NULL;
     Paramstruct *tail = NULL;
@@ -1197,7 +1205,7 @@ tnode* makeAssignNode(tnode* id, tnode* expr) {
     }
 
     if (id->classType != NULL) {
-        compatible = expr->classType == id->classType ||
+        compatible = IsSameOrDerivedClass(expr->classType, id->classType) ||
                      (expr->classType == NULL && expr->typeEntry == TLookup("null"));
     } else {
         int nullToUserType = expr->typeEntry == TLookup("null") &&
@@ -1264,8 +1272,8 @@ tnode* makeClassAllocNode(tnode *target, char *className) {
         fprintf(stderr, "Error: new(%s) target must be a class variable\n", className);
         exit(1);
     }
-    if (target->classType != requestedClass) {
-        fprintf(stderr, "Error: new(%s) does not match the target class '%s'\n",
+    if (!IsSameOrDerivedClass(requestedClass, target->classType)) {
+        fprintf(stderr, "Error: new(%s) is not the same as or derived from target class '%s'\n",
                 className, target->classType->name);
         exit(1);
     }
