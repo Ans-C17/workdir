@@ -180,6 +180,111 @@ Classtable *CLookup(char *name) {
     return NULL;
 }
 
+static Paramstruct *CloneClassParams(Paramstruct *source) {
+    Paramstruct *head = NULL;
+    Paramstruct *tail = NULL;
+
+    while (source != NULL) {
+        Paramstruct *copy = calloc(1, sizeof(Paramstruct));
+        if (copy == NULL) goto fail;
+        copy->name = strdup(source->name);
+        if (copy->name == NULL) {
+            free(copy);
+            goto fail;
+        }
+        copy->type = source->type;
+        copy->classType = source->classType;
+        if (tail == NULL) head = copy;
+        else tail->next = copy;
+        tail = copy;
+        source = source->next;
+    }
+    return head;
+
+fail:
+    while (head != NULL) {
+        Paramstruct *next = head->next;
+        free(head->name);
+        free(head);
+        head = next;
+    }
+    return NULL;
+}
+
+static void FreeClassMembers(Classtable *classEntry) {
+    Fieldlist *field = classEntry->memberfield;
+    Memberfunclist *method = classEntry->vfuncptr;
+
+    while (field != NULL) {
+        Fieldlist *next = field->next;
+        free(field->name);
+        free(field);
+        field = next;
+    }
+    while (method != NULL) {
+        Memberfunclist *nextMethod = method->next;
+        Paramstruct *param = method->paramlist;
+        while (param != NULL) {
+            Paramstruct *nextParam = param->next;
+            free(param->name);
+            free(param);
+            param = nextParam;
+        }
+        free(method->name);
+        free(method);
+        method = nextMethod;
+    }
+}
+
+static int CopyInheritedMembers(Classtable *child, Classtable *parent) {
+    Fieldlist *sourceField;
+    Fieldlist **fieldTail = &child->memberfield;
+    Memberfunclist *sourceMethod;
+    Memberfunclist **methodTail = &child->vfuncptr;
+
+    for (sourceField = parent->memberfield; sourceField != NULL;
+         sourceField = sourceField->next) {
+        Fieldlist *copy = calloc(1, sizeof(Fieldlist));
+        if (copy == NULL) return 0;
+        copy->name = strdup(sourceField->name);
+        if (copy->name == NULL) {
+            free(copy);
+            return 0;
+        }
+        copy->fieldIndex = sourceField->fieldIndex;
+        copy->type = sourceField->type;
+        copy->classType = sourceField->classType;
+        *fieldTail = copy;
+        fieldTail = &copy->next;
+        child->fieldCount++;
+    }
+
+    for (sourceMethod = parent->vfuncptr; sourceMethod != NULL;
+         sourceMethod = sourceMethod->next) {
+        Memberfunclist *copy = calloc(1, sizeof(Memberfunclist));
+        if (copy == NULL) return 0;
+        copy->name = strdup(sourceMethod->name);
+        if (copy->name == NULL) {
+            free(copy);
+            return 0;
+        }
+        copy->paramlist = CloneClassParams(sourceMethod->paramlist);
+        if (sourceMethod->paramlist != NULL && copy->paramlist == NULL) {
+            free(copy->name);
+            free(copy);
+            return 0;
+        }
+        copy->type = sourceMethod->type;
+        copy->funcposition = sourceMethod->funcposition;
+        copy->flabel = sourceMethod->flabel;
+        copy->isDefined = sourceMethod->isDefined;
+        *methodTail = copy;
+        methodTail = &copy->next;
+        child->methodCount++;
+    }
+    return 1;
+}
+
 Classtable *CInstall(char *name, char *parentClassName) {
     Classtable *entry;
     Classtable *parent = NULL;
@@ -200,6 +305,13 @@ Classtable *CInstall(char *name, char *parentClassName) {
     }
     entry->parentptr = parent;
     entry->classIndex = nextClassIndex++;
+
+    if (parent != NULL && !CopyInheritedMembers(entry, parent)) {
+        FreeClassMembers(entry);
+        free(entry->name);
+        free(entry);
+        return NULL;
+    }
 
     if (Chead == NULL) Chead = entry;
     else Ctail->next = entry;

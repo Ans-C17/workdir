@@ -14,6 +14,7 @@ FILE* targetFile;
 int nextFunctionLabel = 0;
 Classtable *currentClass = NULL;
 Memberfunclist *currentMethod = NULL;
+static int currentClassHasOwnMethodDecl = 0;
 
 static void InstallGlobalVarList(VarList *variables, Typetable *type,
                                  Classtable *classType) {
@@ -54,7 +55,7 @@ static void InstallGlobalVarList(VarList *variables, Typetable *type,
 }
 
 static void CheckClassFieldOrder(void) {
-    if (currentClass != NULL && currentClass->methodCount != 0) {
+    if (currentClass != NULL && currentClassHasOwnMethodDecl) {
         fprintf(stderr, "Error: class fields must be declared before methods in class '%s'\n",
                 currentClass->name);
         exit(1);
@@ -150,7 +151,7 @@ TypeDefBlock : TYPE TypeDefList ENDTYPE
              | /* empty */
              ;
 
-/* Class syntax. Inheritance is intentionally excluded at this stage. */
+/* Class syntax, including inheritance from an earlier class definition. */
 ClassDefBlock : CLASS ClassDefList ENDCLASS { PrintClassTable(); }
               | /* empty */
               ;
@@ -165,6 +166,7 @@ ClassDef : ID ClassParentOpt {
                   fprintf(stderr, "Error: class '%s' is already defined, has an invalid parent, or cannot be installed\n", $1);
                   exit(1);
               }
+              currentClassHasOwnMethodDecl = 0;
           } '{' DECL ClassMemberDecls ENDDECL ClassMethodDefList '}' {
               if (!Class_CheckMethodDefinitions(currentClass)) {
                   exit(1);
@@ -177,7 +179,7 @@ ClassDef : ID ClassParentOpt {
 /* One shared list avoids adjacent nullable field/method lists. The field
    actions below enforce the required fields-before-methods order. */
 ClassMemberDecls : ClassMemberDecls ClassField
-                 | ClassMemberDecls ClassMethodDecl
+                 | ClassMemberDecls ClassMethodDecl { currentClassHasOwnMethodDecl = 1; }
                  | /* empty */
                  ;
 
