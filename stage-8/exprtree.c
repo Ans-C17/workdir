@@ -211,6 +211,30 @@ fail:
     return NULL;
 }
 
+static void FreeClassParams(Paramstruct *param) {
+    while (param != NULL) {
+        Paramstruct *next = param->next;
+        free(param->name);
+        free(param);
+        param = next;
+    }
+}
+
+static int SameMethodSignature(Typetable *returnType, Paramstruct *params,
+                               Memberfunclist *inherited) {
+    Paramstruct *expected;
+
+    if (inherited == NULL || inherited->type != returnType) return 0;
+    expected = inherited->paramlist;
+    while (expected != NULL && params != NULL) {
+        if (expected->type != params->type ||
+            expected->classType != params->classType) return 0;
+        expected = expected->next;
+        params = params->next;
+    }
+    return expected == NULL && params == NULL;
+}
+
 static void FreeClassMembers(Classtable *classEntry) {
     Fieldlist *field = classEntry->memberfield;
     Memberfunclist *method = classEntry->vfuncptr;
@@ -223,13 +247,7 @@ static void FreeClassMembers(Classtable *classEntry) {
     }
     while (method != NULL) {
         Memberfunclist *nextMethod = method->next;
-        Paramstruct *param = method->paramlist;
-        while (param != NULL) {
-            Paramstruct *nextParam = param->next;
-            free(param->name);
-            free(param);
-            param = nextParam;
-        }
+        FreeClassParams(method->paramlist);
         free(method->name);
         free(method);
         method = nextMethod;
@@ -275,6 +293,7 @@ static int CopyInheritedMembers(Classtable *child, Classtable *parent) {
             return 0;
         }
         copy->type = sourceMethod->type;
+        copy->ownerClass = sourceMethod->ownerClass;
         copy->funcposition = sourceMethod->funcposition;
         copy->flabel = sourceMethod->flabel;
         copy->isDefined = sourceMethod->isDefined;
@@ -334,7 +353,9 @@ Fieldlist *Class_Finstall(Classtable *classEntry, char *typeName, char *fieldNam
     Classtable *fieldClass;
 
     if (classEntry == NULL || typeName == NULL || fieldName == NULL ||
-        classEntry->fieldCount >= 8 || Class_Flookup(classEntry, fieldName) != NULL)
+        classEntry->fieldCount >= 8 || Class_Flookup(classEntry, fieldName) != NULL ||
+        (classEntry->parentptr != NULL &&
+         Class_Flookup(classEntry->parentptr, fieldName) != NULL))
         return NULL;
 
     fieldType = TLookup(typeName);
@@ -373,9 +394,24 @@ Memberfunclist *Class_Mlookup(Classtable *classEntry, char *name) {
 Memberfunclist *Class_Minstall(Classtable *classEntry, char *name,
                                Typetable *returnType, Paramstruct *paramlist) {
     Memberfunclist *method, *tail;
-    if (classEntry == NULL || name == NULL || returnType == NULL ||
-        classEntry->methodCount >= 8 || Class_Mlookup(classEntry, name) != NULL)
-        return NULL;
+    if (classEntry == NULL || name == NULL || returnType == NULL) return NULL;
+
+    method = Class_Mlookup(classEntry, name);
+    if (method != NULL) {
+        if (method->ownerClass == classEntry ||
+            !SameMethodSignature(returnType, paramlist, method))
+            return NULL;
+
+        FreeClassParams(method->paramlist);
+        method->paramlist = paramlist;
+        method->type = returnType;
+        method->ownerClass = classEntry;
+        method->flabel = nextFunctionLabel++;
+        method->isDefined = 0;
+        return method;
+    }
+
+    if (classEntry->methodCount >= 8) return NULL;
 
     method = calloc(1, sizeof(Memberfunclist));
     if (method == NULL) return NULL;
@@ -384,6 +420,7 @@ Memberfunclist *Class_Minstall(Classtable *classEntry, char *name,
         free(method);
         return NULL;
     }
+    method->ownerClass = classEntry;
     method->type = returnType;
     method->paramlist = paramlist;
     method->funcposition = classEntry->methodCount++;

@@ -61,6 +61,21 @@ static void CheckClassFieldOrder(void) {
         exit(1);
     }
 }
+
+static void InstallDeclaredClassField(char *typeName, char *fieldName) {
+    if (currentClass != NULL && currentClass->parentptr != NULL &&
+        Class_Flookup(currentClass->parentptr, fieldName) != NULL) {
+        fprintf(stderr, "Error: field '%s' redeclares an inherited field in class '%s'\n",
+                fieldName, currentClass->name);
+        exit(1);
+    }
+
+    if (Class_Finstall(currentClass, typeName, fieldName) == NULL) {
+        fprintf(stderr, "Error: field '%s %s' is invalid, duplicated, or exceeds the 8-field limit in class '%s'\n",
+                typeName, fieldName, currentClass == NULL ? "?" : currentClass->name);
+        exit(1);
+    }
+}
 %}
 
 %union{
@@ -185,19 +200,11 @@ ClassMemberDecls : ClassMemberDecls ClassField
 
 ClassField : INT ID SEMICOLON {
                CheckClassFieldOrder();
-               if (Class_Finstall(currentClass, "int", $2) == NULL) {
-                   fprintf(stderr, "Error: field '%s %s' is invalid, duplicated, or exceeds the 8-field limit in class '%s'\n",
-                           "int", $2, currentClass == NULL ? "?" : currentClass->name);
-                   exit(1);
-               }
+               InstallDeclaredClassField("int", $2);
            }
            | STR ID SEMICOLON {
                CheckClassFieldOrder();
-               if (Class_Finstall(currentClass, "str", $2) == NULL) {
-                   fprintf(stderr, "Error: field '%s %s' is invalid, duplicated, or exceeds the 8-field limit in class '%s'\n",
-                           "str", $2, currentClass == NULL ? "?" : currentClass->name);
-                   exit(1);
-               }
+               InstallDeclaredClassField("str", $2);
            }
            | ID ID SEMICOLON {
                CheckClassFieldOrder();
@@ -209,24 +216,20 @@ ClassField : INT ID SEMICOLON {
                    fprintf(stderr, "Error: class fields may use only previously defined classes\n");
                    exit(1);
                }
-               if (Class_Finstall(currentClass, $1, $2) == NULL) {
-                   fprintf(stderr, "Error: field '%s %s' is invalid, duplicated, or exceeds the 8-field limit in class '%s'\n",
-                           $1, $2, currentClass == NULL ? "?" : currentClass->name);
-                   exit(1);
-               }
+               InstallDeclaredClassField($1, $2);
            }
            ;
 
 ClassMethodDecl : INT ID '(' ParamList ')' SEMICOLON {
                     if (Class_Minstall(currentClass, $2, TLookup("int"), $4) == NULL) {
-                        fprintf(stderr, "Error: method '%s' is invalid, duplicated, or exceeds the 8-method limit in class '%s'\n",
+                        fprintf(stderr, "Error: method '%s' is invalid, duplicated, has an incompatible override signature, or exceeds the 8-method limit in class '%s'\n",
                                 $2, currentClass == NULL ? "?" : currentClass->name);
                         exit(1);
                     }
                 }
                 | STR ID '(' ParamList ')' SEMICOLON {
                     if (Class_Minstall(currentClass, $2, TLookup("str"), $4) == NULL) {
-                        fprintf(stderr, "Error: method '%s' is invalid, duplicated, or exceeds the 8-method limit in class '%s'\n",
+                        fprintf(stderr, "Error: method '%s' is invalid, duplicated, has an incompatible override signature, or exceeds the 8-method limit in class '%s'\n",
                                 $2, currentClass == NULL ? "?" : currentClass->name);
                         exit(1);
                     }
@@ -234,21 +237,21 @@ ClassMethodDecl : INT ID '(' ParamList ')' SEMICOLON {
                 | ID ID '(' ParamList ')' SEMICOLON {
                     Typetable *returnType = TLookup($1);
                     if (returnType == NULL || Class_Minstall(currentClass, $2, returnType, $4) == NULL) {
-                        fprintf(stderr, "Error: method '%s' has an invalid return type or is duplicated/exceeds the 8-method limit in class '%s'\n",
+                        fprintf(stderr, "Error: method '%s' has an invalid return type, duplicate name, incompatible override signature, or exceeds the 8-method limit in class '%s'\n",
                                 $2, currentClass == NULL ? "?" : currentClass->name);
                         exit(1);
                     }
                 }
                 | INT MUL ID '(' ParamList ')' SEMICOLON {
                     if (Class_Minstall(currentClass, $3, PointerType(TLookup("int")), $5) == NULL) {
-                        fprintf(stderr, "Error: method '%s' is invalid, duplicated, or exceeds the 8-method limit in class '%s'\n",
+                        fprintf(stderr, "Error: method '%s' is invalid, duplicated, has an incompatible override signature, or exceeds the 8-method limit in class '%s'\n",
                                 $3, currentClass == NULL ? "?" : currentClass->name);
                         exit(1);
                     }
                 }
                 | STR MUL ID '(' ParamList ')' SEMICOLON {
                     if (Class_Minstall(currentClass, $3, PointerType(TLookup("str")), $5) == NULL) {
-                        fprintf(stderr, "Error: method '%s' is invalid, duplicated, or exceeds the 8-method limit in class '%s'\n",
+                        fprintf(stderr, "Error: method '%s' is invalid, duplicated, has an incompatible override signature, or exceeds the 8-method limit in class '%s'\n",
                                 $3, currentClass == NULL ? "?" : currentClass->name);
                         exit(1);
                     }
@@ -257,7 +260,7 @@ ClassMethodDecl : INT ID '(' ParamList ')' SEMICOLON {
                     Typetable *returnType = TLookup($1);
                     if (returnType == NULL || !IsUserDefinedType(returnType) ||
                         Class_Minstall(currentClass, $3, PointerType(returnType), $5) == NULL) {
-                        fprintf(stderr, "Error: method '%s' has an invalid pointer return type or is duplicated/exceeds the 8-method limit in class '%s'\n",
+                        fprintf(stderr, "Error: method '%s' has an invalid pointer return type, duplicate name, incompatible override signature, or exceeds the 8-method limit in class '%s'\n",
                                 $3, currentClass == NULL ? "?" : currentClass->name);
                         exit(1);
                     }

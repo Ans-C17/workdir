@@ -86,6 +86,7 @@ typedef struct Paramstruct {
 
 struct Memberfunclist {
     char *name;
+    Classtable *ownerClass;     // class that declares or overrides this method
     Typetable *type;            // method return type
     Paramstruct *paramlist;
     int funcposition;

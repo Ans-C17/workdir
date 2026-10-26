@@ -131,7 +131,22 @@ static void CheckClassFieldOrder(void) {
     }
 }
 
-#line 135 "exprtree.tab.c"
+static void InstallDeclaredClassField(char *typeName, char *fieldName) {
+    if (currentClass != NULL && currentClass->parentptr != NULL &&
+        Class_Flookup(currentClass->parentptr, fieldName) != NULL) {
+        fprintf(stderr, "Error: field '%s' redeclares an inherited field in class '%s'\n",
+                fieldName, currentClass->name);
+        exit(1);
+    }
+
+    if (Class_Finstall(currentClass, typeName, fieldName) == NULL) {
+        fprintf(stderr, "Error: field '%s %s' is invalid, duplicated, or exceeds the 8-field limit in class '%s'\n",
+                typeName, fieldName, currentClass == NULL ? "?" : currentClass->name);
+        exit(1);
+    }
+}
+
+#line 150 "exprtree.tab.c"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -238,7 +253,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 66 "exprtree.y"
+#line 81 "exprtree.y"
 
     tnode* node;
     char* str;
@@ -248,7 +263,7 @@ union YYSTYPE
     Typetable* type;
     ParamTypeInfo paramtype;
 
-#line 252 "exprtree.tab.c"
+#line 267 "exprtree.tab.c"
 
 };
 typedef union YYSTYPE YYSTYPE;
@@ -628,23 +643,23 @@ static const yytype_int8 yytranslate[] =
   /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_int16 yyrline[] =
 {
-       0,   145,   145,   146,   147,   150,   151,   155,   156,   159,
-     160,   163,   163,   181,   182,   183,   186,   194,   202,   220,
-     227,   234,   242,   249,   256,   267,   268,   271,   271,   286,
-     287,   290,   290,   300,   301,   304,   315,   316,   317,   326,
-     326,   328,   328,   330,   333,   336,   351,   352,   353,   363,
-     364,   367,   368,   384,   400,   412,   427,   438,   454,   464,
-     477,   486,   505,   519,   532,   544,   547,   551,   554,   559,
-     561,   564,   567,   572,   572,   574,   574,   583,   593,   596,
-     600,   615,   628,   632,   636,   650,   650,   652,   652,   654,
-     665,   667,   686,   697,   709,   717,   726,   740,   741,   744,
-     745,   747,   750,   750,   772,   775,   779,   782,   785,   788,
-     791,   794,   797,   800,   803,   806,   809,   812,   815,   818,
-     821,   824,   827,   831,   834,   839,   843,   846,   851,   854,
-     858,   862,   866,   870,   874,   878,   881,   884,   887,   890,
-     893,   896,   899,   902,   905,   908,   911,   914,   917,   920,
-     923,   926,   929,   932,   935,   938,   941,   944,   947,   951,
-     954
+       0,   160,   160,   161,   162,   165,   166,   170,   171,   174,
+     175,   178,   178,   196,   197,   198,   201,   205,   209,   223,
+     230,   237,   245,   252,   259,   270,   271,   274,   274,   289,
+     290,   293,   293,   303,   304,   307,   318,   319,   320,   329,
+     329,   331,   331,   333,   336,   339,   354,   355,   356,   366,
+     367,   370,   371,   387,   403,   415,   430,   441,   457,   467,
+     480,   489,   508,   522,   535,   547,   550,   554,   557,   562,
+     564,   567,   570,   575,   575,   577,   577,   586,   596,   599,
+     603,   618,   631,   635,   639,   653,   653,   655,   655,   657,
+     668,   670,   689,   700,   712,   720,   729,   743,   744,   747,
+     748,   750,   753,   753,   775,   778,   782,   785,   788,   791,
+     794,   797,   800,   803,   806,   809,   812,   815,   818,   821,
+     824,   827,   830,   834,   837,   842,   846,   849,   854,   857,
+     861,   865,   869,   873,   877,   881,   884,   887,   890,   893,
+     896,   899,   902,   905,   908,   911,   914,   917,   920,   923,
+     926,   929,   932,   935,   938,   941,   944,   947,   950,   954,
+     957
 };
 #endif
 
@@ -1757,31 +1772,31 @@ yyreduce:
   switch (yyn)
     {
   case 2:
-#line 145 "exprtree.y"
+#line 160 "exprtree.y"
                                                                     { (yyval.node) = (yyvsp[0].node); }
-#line 1763 "exprtree.tab.c"
+#line 1778 "exprtree.tab.c"
     break;
 
   case 3:
-#line 146 "exprtree.y"
+#line 161 "exprtree.y"
                                                                     { (yyval.node) = (yyvsp[0].node); }
-#line 1769 "exprtree.tab.c"
+#line 1784 "exprtree.tab.c"
     break;
 
   case 4:
-#line 147 "exprtree.y"
+#line 162 "exprtree.y"
                                                                     { (yyval.node) = (yyvsp[0].node); }
-#line 1775 "exprtree.tab.c"
+#line 1790 "exprtree.tab.c"
     break;
 
   case 7:
-#line 155 "exprtree.y"
+#line 170 "exprtree.y"
                                             { PrintClassTable(); }
-#line 1781 "exprtree.tab.c"
+#line 1796 "exprtree.tab.c"
     break;
 
   case 11:
-#line 163 "exprtree.y"
+#line 178 "exprtree.y"
                              {
               currentClass = CInstall((yyvsp[-1].str), (yyvsp[0].str));
               if (currentClass == NULL) {
@@ -1790,11 +1805,11 @@ yyreduce:
               }
               currentClassHasOwnMethodDecl = 0;
           }
-#line 1794 "exprtree.tab.c"
+#line 1809 "exprtree.tab.c"
     break;
 
   case 12:
-#line 170 "exprtree.y"
+#line 185 "exprtree.y"
                                                                      {
               if (!Class_CheckMethodDefinitions(currentClass)) {
                   exit(1);
@@ -1802,43 +1817,35 @@ yyreduce:
               currentClass = NULL;
               currentMethod = NULL;
           }
-#line 1806 "exprtree.tab.c"
+#line 1821 "exprtree.tab.c"
     break;
 
   case 14:
-#line 182 "exprtree.y"
+#line 197 "exprtree.y"
                                                     { currentClassHasOwnMethodDecl = 1; }
-#line 1812 "exprtree.tab.c"
+#line 1827 "exprtree.tab.c"
     break;
 
   case 16:
-#line 186 "exprtree.y"
+#line 201 "exprtree.y"
                               {
                CheckClassFieldOrder();
-               if (Class_Finstall(currentClass, "int", (yyvsp[-1].str)) == NULL) {
-                   fprintf(stderr, "Error: field '%s %s' is invalid, duplicated, or exceeds the 8-field limit in class '%s'\n",
-                           "int", (yyvsp[-1].str), currentClass == NULL ? "?" : currentClass->name);
-                   exit(1);
-               }
+               InstallDeclaredClassField("int", (yyvsp[-1].str));
            }
-#line 1825 "exprtree.tab.c"
+#line 1836 "exprtree.tab.c"
     break;
 
   case 17:
-#line 194 "exprtree.y"
+#line 205 "exprtree.y"
                               {
                CheckClassFieldOrder();
-               if (Class_Finstall(currentClass, "str", (yyvsp[-1].str)) == NULL) {
-                   fprintf(stderr, "Error: field '%s %s' is invalid, duplicated, or exceeds the 8-field limit in class '%s'\n",
-                           "str", (yyvsp[-1].str), currentClass == NULL ? "?" : currentClass->name);
-                   exit(1);
-               }
+               InstallDeclaredClassField("str", (yyvsp[-1].str));
            }
-#line 1838 "exprtree.tab.c"
+#line 1845 "exprtree.tab.c"
     break;
 
   case 18:
-#line 202 "exprtree.y"
+#line 209 "exprtree.y"
                              {
                CheckClassFieldOrder();
                if (TLookup((yyvsp[-2].str)) == NULL && CLookup((yyvsp[-2].str)) == NULL) {
@@ -1849,102 +1856,98 @@ yyreduce:
                    fprintf(stderr, "Error: class fields may use only previously defined classes\n");
                    exit(1);
                }
-               if (Class_Finstall(currentClass, (yyvsp[-2].str), (yyvsp[-1].str)) == NULL) {
-                   fprintf(stderr, "Error: field '%s %s' is invalid, duplicated, or exceeds the 8-field limit in class '%s'\n",
-                           (yyvsp[-2].str), (yyvsp[-1].str), currentClass == NULL ? "?" : currentClass->name);
-                   exit(1);
-               }
+               InstallDeclaredClassField((yyvsp[-2].str), (yyvsp[-1].str));
            }
-#line 1859 "exprtree.tab.c"
+#line 1862 "exprtree.tab.c"
     break;
 
   case 19:
-#line 220 "exprtree.y"
+#line 223 "exprtree.y"
                                                      {
                     if (Class_Minstall(currentClass, (yyvsp[-4].str), TLookup("int"), (yyvsp[-2].paramlist)) == NULL) {
-                        fprintf(stderr, "Error: method '%s' is invalid, duplicated, or exceeds the 8-method limit in class '%s'\n",
+                        fprintf(stderr, "Error: method '%s' is invalid, duplicated, has an incompatible override signature, or exceeds the 8-method limit in class '%s'\n",
                                 (yyvsp[-4].str), currentClass == NULL ? "?" : currentClass->name);
                         exit(1);
                     }
                 }
-#line 1871 "exprtree.tab.c"
+#line 1874 "exprtree.tab.c"
     break;
 
   case 20:
-#line 227 "exprtree.y"
+#line 230 "exprtree.y"
                                                      {
                     if (Class_Minstall(currentClass, (yyvsp[-4].str), TLookup("str"), (yyvsp[-2].paramlist)) == NULL) {
-                        fprintf(stderr, "Error: method '%s' is invalid, duplicated, or exceeds the 8-method limit in class '%s'\n",
+                        fprintf(stderr, "Error: method '%s' is invalid, duplicated, has an incompatible override signature, or exceeds the 8-method limit in class '%s'\n",
                                 (yyvsp[-4].str), currentClass == NULL ? "?" : currentClass->name);
                         exit(1);
                     }
                 }
-#line 1883 "exprtree.tab.c"
+#line 1886 "exprtree.tab.c"
     break;
 
   case 21:
-#line 234 "exprtree.y"
+#line 237 "exprtree.y"
                                                     {
                     Typetable *returnType = TLookup((yyvsp[-5].str));
                     if (returnType == NULL || Class_Minstall(currentClass, (yyvsp[-4].str), returnType, (yyvsp[-2].paramlist)) == NULL) {
-                        fprintf(stderr, "Error: method '%s' has an invalid return type or is duplicated/exceeds the 8-method limit in class '%s'\n",
+                        fprintf(stderr, "Error: method '%s' has an invalid return type, duplicate name, incompatible override signature, or exceeds the 8-method limit in class '%s'\n",
                                 (yyvsp[-4].str), currentClass == NULL ? "?" : currentClass->name);
                         exit(1);
                     }
                 }
-#line 1896 "exprtree.tab.c"
+#line 1899 "exprtree.tab.c"
     break;
 
   case 22:
-#line 242 "exprtree.y"
+#line 245 "exprtree.y"
                                                          {
                     if (Class_Minstall(currentClass, (yyvsp[-4].str), PointerType(TLookup("int")), (yyvsp[-2].paramlist)) == NULL) {
-                        fprintf(stderr, "Error: method '%s' is invalid, duplicated, or exceeds the 8-method limit in class '%s'\n",
+                        fprintf(stderr, "Error: method '%s' is invalid, duplicated, has an incompatible override signature, or exceeds the 8-method limit in class '%s'\n",
                                 (yyvsp[-4].str), currentClass == NULL ? "?" : currentClass->name);
                         exit(1);
                     }
                 }
-#line 1908 "exprtree.tab.c"
+#line 1911 "exprtree.tab.c"
     break;
 
   case 23:
-#line 249 "exprtree.y"
+#line 252 "exprtree.y"
                                                          {
                     if (Class_Minstall(currentClass, (yyvsp[-4].str), PointerType(TLookup("str")), (yyvsp[-2].paramlist)) == NULL) {
-                        fprintf(stderr, "Error: method '%s' is invalid, duplicated, or exceeds the 8-method limit in class '%s'\n",
+                        fprintf(stderr, "Error: method '%s' is invalid, duplicated, has an incompatible override signature, or exceeds the 8-method limit in class '%s'\n",
                                 (yyvsp[-4].str), currentClass == NULL ? "?" : currentClass->name);
                         exit(1);
                     }
                 }
-#line 1920 "exprtree.tab.c"
+#line 1923 "exprtree.tab.c"
     break;
 
   case 24:
-#line 256 "exprtree.y"
+#line 259 "exprtree.y"
                                                         {
                     Typetable *returnType = TLookup((yyvsp[-6].str));
                     if (returnType == NULL || !IsUserDefinedType(returnType) ||
                         Class_Minstall(currentClass, (yyvsp[-4].str), PointerType(returnType), (yyvsp[-2].paramlist)) == NULL) {
-                        fprintf(stderr, "Error: method '%s' has an invalid pointer return type or is duplicated/exceeds the 8-method limit in class '%s'\n",
+                        fprintf(stderr, "Error: method '%s' has an invalid pointer return type, duplicate name, incompatible override signature, or exceeds the 8-method limit in class '%s'\n",
                                 (yyvsp[-4].str), currentClass == NULL ? "?" : currentClass->name);
                         exit(1);
                     }
                 }
-#line 1934 "exprtree.tab.c"
+#line 1937 "exprtree.tab.c"
     break;
 
   case 27:
-#line 271 "exprtree.y"
+#line 274 "exprtree.y"
                                             {
                     currentMethod = Class_MatchMethodDefinition(currentClass, (yyvsp[-3].str), (yyvsp[-4].type), (yyvsp[-1].paramlist));
                     if (currentMethod == NULL) exit(1);
                     BeginMethodScope((yyvsp[-1].paramlist), currentClass);
                 }
-#line 1944 "exprtree.tab.c"
+#line 1947 "exprtree.tab.c"
     break;
 
   case 28:
-#line 275 "exprtree.y"
+#line 278 "exprtree.y"
                                           {
                     char qualifiedName[256];
                     snprintf(qualifiedName, sizeof(qualifiedName), "%s.%s",
@@ -1955,30 +1958,30 @@ yyreduce:
                     EndFunctionScope();
                     currentMethod = NULL;
                 }
-#line 1959 "exprtree.tab.c"
+#line 1962 "exprtree.tab.c"
     break;
 
   case 31:
-#line 290 "exprtree.y"
+#line 293 "exprtree.y"
                  {
             if (TBeginDefinition((yyvsp[-1].str)) == NULL) {
                 fprintf(stderr, "Error: type '%s' is already defined or cannot be started\n", (yyvsp[-1].str));
                 exit(1);
             }
         }
-#line 1970 "exprtree.tab.c"
+#line 1973 "exprtree.tab.c"
     break;
 
   case 32:
-#line 295 "exprtree.y"
+#line 298 "exprtree.y"
                             {
             TFinishDefinition(TCurrentDefinition());
         }
-#line 1978 "exprtree.tab.c"
+#line 1981 "exprtree.tab.c"
     break;
 
   case 35:
-#line 304 "exprtree.y"
+#line 307 "exprtree.y"
                                    {
               Typetable *owner = TCurrentDefinition();
               if (owner == NULL ||
@@ -1988,23 +1991,23 @@ yyreduce:
               }
               owner->size++;
           }
-#line 1992 "exprtree.tab.c"
+#line 1995 "exprtree.tab.c"
     break;
 
   case 36:
-#line 315 "exprtree.y"
+#line 318 "exprtree.y"
                 { (yyval.type) = TLookup("int"); }
-#line 1998 "exprtree.tab.c"
+#line 2001 "exprtree.tab.c"
     break;
 
   case 37:
-#line 316 "exprtree.y"
+#line 319 "exprtree.y"
                 { (yyval.type) = TLookup("str"); }
-#line 2004 "exprtree.tab.c"
+#line 2007 "exprtree.tab.c"
     break;
 
   case 38:
-#line 317 "exprtree.y"
+#line 320 "exprtree.y"
                {
               (yyval.type) = TLookup((yyvsp[0].str));
               if ((yyval.type) == NULL || !IsUserDefinedType((yyval.type))) {
@@ -2012,27 +2015,27 @@ yyreduce:
                   exit(1);
               }
           }
-#line 2016 "exprtree.tab.c"
+#line 2019 "exprtree.tab.c"
     break;
 
   case 43:
-#line 330 "exprtree.y"
+#line 333 "exprtree.y"
                               {
            InstallGlobalVarList((yyvsp[-1].varlist), TLookup("int"), NULL);
        }
-#line 2024 "exprtree.tab.c"
+#line 2027 "exprtree.tab.c"
     break;
 
   case 44:
-#line 333 "exprtree.y"
+#line 336 "exprtree.y"
                              {
            InstallGlobalVarList((yyvsp[-1].varlist), TLookup("str"), NULL);
        }
-#line 2032 "exprtree.tab.c"
+#line 2035 "exprtree.tab.c"
     break;
 
   case 45:
-#line 336 "exprtree.y"
+#line 339 "exprtree.y"
                             {
            Typetable *type = TLookup((yyvsp[-2].str));
            Classtable *classType = CLookup((yyvsp[-2].str));
@@ -2046,23 +2049,23 @@ yyreduce:
                exit(1);
            }
        }
-#line 2050 "exprtree.tab.c"
+#line 2053 "exprtree.tab.c"
     break;
 
   case 46:
-#line 351 "exprtree.y"
+#line 354 "exprtree.y"
                { (yyval.type) = TLookup("int"); }
-#line 2056 "exprtree.tab.c"
+#line 2059 "exprtree.tab.c"
     break;
 
   case 47:
-#line 352 "exprtree.y"
+#line 355 "exprtree.y"
                { (yyval.type) = TLookup("str"); }
-#line 2062 "exprtree.tab.c"
+#line 2065 "exprtree.tab.c"
     break;
 
   case 48:
-#line 353 "exprtree.y"
+#line 356 "exprtree.y"
                {
              Typetable *resolvedType = TLookup((yyvsp[0].str));
              if (resolvedType == NULL || !IsUserDefinedType(resolvedType)) {
@@ -2071,29 +2074,29 @@ yyreduce:
              }
              (yyval.type) = resolvedType;
          }
-#line 2075 "exprtree.tab.c"
+#line 2078 "exprtree.tab.c"
     break;
 
   case 49:
-#line 363 "exprtree.y"
+#line 366 "exprtree.y"
                             { (yyval.str) = (yyvsp[0].str); }
-#line 2081 "exprtree.tab.c"
+#line 2084 "exprtree.tab.c"
     break;
 
   case 50:
-#line 364 "exprtree.y"
+#line 367 "exprtree.y"
                              { (yyval.str) = NULL; }
-#line 2087 "exprtree.tab.c"
+#line 2090 "exprtree.tab.c"
     break;
 
   case 51:
-#line 367 "exprtree.y"
+#line 370 "exprtree.y"
                  { (yyval.type) = (yyvsp[0].type); }
-#line 2093 "exprtree.tab.c"
+#line 2096 "exprtree.tab.c"
     break;
 
   case 52:
-#line 368 "exprtree.y"
+#line 371 "exprtree.y"
                      {
           (yyval.type) = PointerType((yyvsp[-1].type));
           if ((yyval.type) == NULL) {
@@ -2101,11 +2104,11 @@ yyreduce:
               exit(1);
           }
       }
-#line 2105 "exprtree.tab.c"
+#line 2108 "exprtree.tab.c"
     break;
 
   case 53:
-#line 384 "exprtree.y"
+#line 387 "exprtree.y"
                                                  {
         VarList* newVar = calloc(1, sizeof(VarList));
         newVar->name = (yyvsp[-6].str);
@@ -2122,11 +2125,11 @@ yyreduce:
         temp->next = newVar;
         (yyval.varlist) = (yyvsp[-8].varlist);
     }
-#line 2126 "exprtree.tab.c"
+#line 2129 "exprtree.tab.c"
     break;
 
   case 54:
-#line 400 "exprtree.y"
+#line 403 "exprtree.y"
                                  { 
         VarList *newVar = calloc(1, sizeof(struct VarList));
         newVar->name = (yyvsp[-6].str);
@@ -2139,11 +2142,11 @@ yyreduce:
         newVar->next = NULL;
         (yyval.varlist) = newVar;
     }
-#line 2143 "exprtree.tab.c"
+#line 2146 "exprtree.tab.c"
     break;
 
   case 55:
-#line 412 "exprtree.y"
+#line 415 "exprtree.y"
                                  { 
         VarList* newVar = calloc(1, sizeof(VarList));
         newVar->name = (yyvsp[-3].str);
@@ -2159,11 +2162,11 @@ yyreduce:
         temp->next = newVar;
         (yyval.varlist) = (yyvsp[-5].varlist);
     }
-#line 2163 "exprtree.tab.c"
+#line 2166 "exprtree.tab.c"
     break;
 
   case 56:
-#line 427 "exprtree.y"
+#line 430 "exprtree.y"
                      {
         VarList* newVar = calloc(1, sizeof(VarList));
         newVar->name = (yyvsp[-3].str);
@@ -2175,11 +2178,11 @@ yyreduce:
         newVar->next = NULL;
         (yyval.varlist) = newVar;
     }
-#line 2179 "exprtree.tab.c"
+#line 2182 "exprtree.tab.c"
     break;
 
   case 57:
-#line 438 "exprtree.y"
+#line 441 "exprtree.y"
                      {
         VarList* newVar = calloc(1, sizeof(VarList));
         newVar->name = (yyvsp[0].str);
@@ -2196,11 +2199,11 @@ yyreduce:
         temp->next = newVar;
         (yyval.varlist) = (yyvsp[-2].varlist);
     }
-#line 2200 "exprtree.tab.c"
+#line 2203 "exprtree.tab.c"
     break;
 
   case 58:
-#line 454 "exprtree.y"
+#line 457 "exprtree.y"
          {
         VarList* newVar = calloc(1, sizeof(VarList));
         newVar->name = (yyvsp[0].str);
@@ -2211,11 +2214,11 @@ yyreduce:
 
         (yyval.varlist) = newVar;
     }
-#line 2215 "exprtree.tab.c"
+#line 2218 "exprtree.tab.c"
     break;
 
   case 59:
-#line 464 "exprtree.y"
+#line 467 "exprtree.y"
                          { // adds a pointer variable to the declaration list
         VarList* newVar = calloc(1, sizeof(VarList));
         newVar->name = (yyvsp[0].str);
@@ -2229,11 +2232,11 @@ yyreduce:
         temp->next = newVar;
         (yyval.varlist) = (yyvsp[-3].varlist);
     }
-#line 2233 "exprtree.tab.c"
+#line 2236 "exprtree.tab.c"
     break;
 
   case 60:
-#line 477 "exprtree.y"
+#line 480 "exprtree.y"
              {
         VarList *newVar = calloc(1, sizeof(VarList));
         newVar->name = (yyvsp[0].str);
@@ -2243,11 +2246,11 @@ yyreduce:
         newVar->next = NULL;
         (yyval.varlist) = newVar;
     }
-#line 2247 "exprtree.tab.c"
+#line 2250 "exprtree.tab.c"
     break;
 
   case 61:
-#line 486 "exprtree.y"
+#line 489 "exprtree.y"
                                      {
         VarList *newVar = calloc(1, sizeof(VarList));
 
@@ -2267,11 +2270,11 @@ yyreduce:
         temp->next = newVar;
         (yyval.varlist) = (yyvsp[-5].varlist);
     }
-#line 2271 "exprtree.tab.c"
+#line 2274 "exprtree.tab.c"
     break;
 
   case 62:
-#line 505 "exprtree.y"
+#line 508 "exprtree.y"
                         {
         VarList *newVar = calloc(1, sizeof(VarList));
 
@@ -2286,11 +2289,11 @@ yyreduce:
 
         (yyval.varlist) = newVar;
     }
-#line 2290 "exprtree.tab.c"
+#line 2293 "exprtree.tab.c"
     break;
 
   case 63:
-#line 519 "exprtree.y"
+#line 522 "exprtree.y"
                                            {
         VarList *newVar = calloc(1, sizeof(VarList));
         VarList *tail = (yyvsp[-6].varlist);
@@ -2304,11 +2307,11 @@ yyreduce:
         tail->next = newVar;
         (yyval.varlist) = (yyvsp[-6].varlist);
     }
-#line 2308 "exprtree.tab.c"
+#line 2311 "exprtree.tab.c"
     break;
 
   case 64:
-#line 532 "exprtree.y"
+#line 535 "exprtree.y"
                                {
         VarList *newVar = calloc(1, sizeof(VarList));
 
@@ -2318,93 +2321,93 @@ yyreduce:
         newVar->paramlist = (yyvsp[-1].paramlist);
         (yyval.varlist) = newVar;
     }
-#line 2322 "exprtree.tab.c"
+#line 2325 "exprtree.tab.c"
     break;
 
   case 65:
-#line 544 "exprtree.y"
+#line 547 "exprtree.y"
               {
         (yyval.node) = makeIdNode((yyvsp[0].str));
     }
-#line 2330 "exprtree.tab.c"
+#line 2333 "exprtree.tab.c"
     break;
 
   case 66:
-#line 547 "exprtree.y"
+#line 550 "exprtree.y"
                    { // this is strictly for accessing array elements only, not declaration
         // also E aayond we can do like arr[i + 5 * 8] lol
         (yyval.node) = makeArrayNode((yyvsp[-3].str), (yyvsp[-1].node));
     }
-#line 2339 "exprtree.tab.c"
+#line 2342 "exprtree.tab.c"
     break;
 
   case 67:
-#line 551 "exprtree.y"
+#line 554 "exprtree.y"
                              {
         (yyval.node) = makeArray2DNode((yyvsp[-6].str), (yyvsp[-4].node), (yyvsp[-1].node));
     }
-#line 2347 "exprtree.tab.c"
+#line 2350 "exprtree.tab.c"
     break;
 
   case 68:
-#line 554 "exprtree.y"
+#line 557 "exprtree.y"
                    { // allows a dereferenced pointer as an assignment target
         (yyval.node) = makeDereferenceNode((yyvsp[0].node));
     }
-#line 2355 "exprtree.tab.c"
+#line 2358 "exprtree.tab.c"
     break;
 
   case 69:
-#line 559 "exprtree.y"
+#line 562 "exprtree.y"
                      { (yyval.node) = makeFieldValueNode((yyvsp[0].node)); }
-#line 2361 "exprtree.tab.c"
+#line 2364 "exprtree.tab.c"
     break;
 
   case 70:
-#line 561 "exprtree.y"
+#line 564 "exprtree.y"
                            {
                  (yyval.node) = makeMemberAccessNode(makeIdNode("self"), (yyvsp[0].str));
              }
-#line 2369 "exprtree.tab.c"
+#line 2372 "exprtree.tab.c"
     break;
 
   case 71:
-#line 564 "exprtree.y"
+#line 567 "exprtree.y"
                               {
                  (yyval.node) = makeMemberAccessNode((yyvsp[-2].node), (yyvsp[0].str));
              }
-#line 2377 "exprtree.tab.c"
+#line 2380 "exprtree.tab.c"
     break;
 
   case 72:
-#line 567 "exprtree.y"
+#line 570 "exprtree.y"
                            {
                  (yyval.node) = makeMemberAccessNode((yyvsp[-2].node), (yyvsp[0].str));
              }
-#line 2385 "exprtree.tab.c"
+#line 2388 "exprtree.tab.c"
     break;
 
   case 75:
-#line 574 "exprtree.y"
+#line 577 "exprtree.y"
                                {
         CheckFunctionDefinition((yyvsp[-3].str), (yyvsp[-4].type), (yyvsp[-1].paramlist));
         BeginFunctionScope((yyvsp[-1].paramlist));
     }
-#line 2394 "exprtree.tab.c"
+#line 2397 "exprtree.tab.c"
     break;
 
   case 76:
-#line 577 "exprtree.y"
+#line 580 "exprtree.y"
                               {
         SaveFunctionAST((yyvsp[-8].str), finalizeBodyNode((yyvsp[-1].node), (yyvsp[-9].type), (yyvsp[-8].str)), 0);
         PrintLocalSymbolTable((yyvsp[-8].str));
         EndFunctionScope();
     }
-#line 2404 "exprtree.tab.c"
+#line 2407 "exprtree.tab.c"
     break;
 
   case 77:
-#line 583 "exprtree.y"
+#line 586 "exprtree.y"
                                 {
         Paramstruct *temp = (yyvsp[-2].paramlist);
 
@@ -2415,27 +2418,27 @@ yyreduce:
         temp->next = (yyvsp[0].paramlist);
         (yyval.paramlist) = (yyvsp[-2].paramlist);
     }
-#line 2419 "exprtree.tab.c"
+#line 2422 "exprtree.tab.c"
     break;
 
   case 78:
-#line 593 "exprtree.y"
+#line 596 "exprtree.y"
             {
         (yyval.paramlist) = (yyvsp[0].paramlist);
     }
-#line 2427 "exprtree.tab.c"
+#line 2430 "exprtree.tab.c"
     break;
 
   case 79:
-#line 596 "exprtree.y"
+#line 599 "exprtree.y"
       { // param can be empty
         (yyval.paramlist) = NULL;
     }
-#line 2435 "exprtree.tab.c"
+#line 2438 "exprtree.tab.c"
     break;
 
   case 80:
-#line 600 "exprtree.y"
+#line 603 "exprtree.y"
                      {
         Paramstruct *p = calloc(1, sizeof(Paramstruct));
 
@@ -2451,11 +2454,11 @@ yyreduce:
 
         (yyval.paramlist) = p;
     }
-#line 2455 "exprtree.tab.c"
+#line 2458 "exprtree.tab.c"
     break;
 
   case 81:
-#line 615 "exprtree.y"
+#line 618 "exprtree.y"
                        {
         Paramstruct *p = calloc(1, sizeof(Paramstruct));
 
@@ -2468,29 +2471,29 @@ yyreduce:
         p->next = NULL;
         (yyval.paramlist) = p;
     }
-#line 2472 "exprtree.tab.c"
+#line 2475 "exprtree.tab.c"
     break;
 
   case 82:
-#line 628 "exprtree.y"
+#line 631 "exprtree.y"
                 {
               (yyval.paramtype).type = TLookup("int");
               (yyval.paramtype).classType = NULL;
           }
-#line 2481 "exprtree.tab.c"
+#line 2484 "exprtree.tab.c"
     break;
 
   case 83:
-#line 632 "exprtree.y"
+#line 635 "exprtree.y"
                 {
               (yyval.paramtype).type = TLookup("str");
               (yyval.paramtype).classType = NULL;
           }
-#line 2490 "exprtree.tab.c"
+#line 2493 "exprtree.tab.c"
     break;
 
   case 84:
-#line 636 "exprtree.y"
+#line 639 "exprtree.y"
                {
               Typetable *type = TLookup((yyvsp[0].str));
               Classtable *classType = CLookup((yyvsp[0].str));
@@ -2503,11 +2506,11 @@ yyreduce:
                   (yyval.paramtype).classType = classType;
               }
           }
-#line 2507 "exprtree.tab.c"
+#line 2510 "exprtree.tab.c"
     break;
 
   case 89:
-#line 654 "exprtree.y"
+#line 657 "exprtree.y"
                                    {
         if ((yyvsp[-2].paramtype).classType != NULL) {
             InstallLocalClassVariables((yyvsp[-1].varlist), (yyvsp[-2].paramtype).classType);
@@ -2518,17 +2521,17 @@ yyreduce:
             InstallLocalVariables((yyvsp[-1].varlist), (yyvsp[-2].paramtype).type);
         }
     }
-#line 2522 "exprtree.tab.c"
+#line 2525 "exprtree.tab.c"
     break;
 
   case 90:
-#line 665 "exprtree.y"
+#line 668 "exprtree.y"
                       { (yyval.paramtype) = (yyvsp[0].paramtype); }
-#line 2528 "exprtree.tab.c"
+#line 2531 "exprtree.tab.c"
     break;
 
   case 91:
-#line 667 "exprtree.y"
+#line 670 "exprtree.y"
                        {
         VarList* newNode = calloc(1, sizeof(VarList));
 
@@ -2548,11 +2551,11 @@ yyreduce:
         temp->next = newNode;
         (yyval.varlist) = (yyvsp[-2].varlist);
     }
-#line 2552 "exprtree.tab.c"
+#line 2555 "exprtree.tab.c"
     break;
 
   case 92:
-#line 686 "exprtree.y"
+#line 689 "exprtree.y"
                                 {
         VarList *newNode = calloc(1, sizeof(VarList));
         VarList *tail = (yyvsp[-5].varlist);
@@ -2564,11 +2567,11 @@ yyreduce:
         tail->next = newNode;
         (yyval.varlist) = (yyvsp[-5].varlist);
     }
-#line 2568 "exprtree.tab.c"
+#line 2571 "exprtree.tab.c"
     break;
 
   case 93:
-#line 697 "exprtree.y"
+#line 700 "exprtree.y"
                                             {
         VarList *newNode = calloc(1, sizeof(VarList));
         VarList *tail = (yyvsp[-8].varlist);
@@ -2581,11 +2584,11 @@ yyreduce:
         tail->next = newNode;
         (yyval.varlist) = (yyvsp[-8].varlist);
     }
-#line 2585 "exprtree.tab.c"
+#line 2588 "exprtree.tab.c"
     break;
 
   case 94:
-#line 709 "exprtree.y"
+#line 712 "exprtree.y"
                      {
         VarList *newNode = calloc(1, sizeof(VarList));
         newNode->name = strdup((yyvsp[-3].str));
@@ -2594,11 +2597,11 @@ yyreduce:
         newNode->isArray = 1;
         (yyval.varlist) = newNode;
     }
-#line 2598 "exprtree.tab.c"
+#line 2601 "exprtree.tab.c"
     break;
 
   case 95:
-#line 717 "exprtree.y"
+#line 720 "exprtree.y"
                                  {
         VarList *newNode = calloc(1, sizeof(VarList));
         newNode->name = strdup((yyvsp[-6].str));
@@ -2608,11 +2611,11 @@ yyreduce:
         newNode->isArray = 1;
         (yyval.varlist) = newNode;
     }
-#line 2612 "exprtree.tab.c"
+#line 2615 "exprtree.tab.c"
     break;
 
   case 96:
-#line 726 "exprtree.y"
+#line 729 "exprtree.y"
          {
         VarList* newNode = calloc(1, sizeof(VarList));
 
@@ -2625,49 +2628,49 @@ yyreduce:
 
         (yyval.varlist) = newNode;
     }
-#line 2629 "exprtree.tab.c"
+#line 2632 "exprtree.tab.c"
     break;
 
   case 97:
-#line 740 "exprtree.y"
+#line 743 "exprtree.y"
                         { (yyval.node) = appendArgNode((yyvsp[-2].node), (yyvsp[0].node)); }
-#line 2635 "exprtree.tab.c"
+#line 2638 "exprtree.tab.c"
     break;
 
   case 98:
-#line 741 "exprtree.y"
+#line 744 "exprtree.y"
                         { (yyval.node) = makeArgListNode((yyvsp[0].node)); }
-#line 2641 "exprtree.tab.c"
+#line 2644 "exprtree.tab.c"
     break;
 
   case 99:
-#line 744 "exprtree.y"
+#line 747 "exprtree.y"
                                       { (yyval.node) = makeBodyNode((yyvsp[-2].node), (yyvsp[-1].node)); }
-#line 2647 "exprtree.tab.c"
+#line 2650 "exprtree.tab.c"
     break;
 
   case 100:
-#line 745 "exprtree.y"
+#line 748 "exprtree.y"
                                       { (yyval.node) = makeBodyNode(NULL, (yyvsp[-1].node)); }
-#line 2653 "exprtree.tab.c"
+#line 2656 "exprtree.tab.c"
     break;
 
   case 101:
-#line 747 "exprtree.y"
+#line 750 "exprtree.y"
                                 { (yyval.node) = makeReturnNode((yyvsp[-1].node)); }
-#line 2659 "exprtree.tab.c"
+#line 2662 "exprtree.tab.c"
     break;
 
   case 102:
-#line 750 "exprtree.y"
+#line 753 "exprtree.y"
                                  {
         BeginFunctionScope(NULL);
     }
-#line 2667 "exprtree.tab.c"
+#line 2670 "exprtree.tab.c"
     break;
 
   case 103:
-#line 752 "exprtree.y"
+#line 755 "exprtree.y"
                           {
         root = finalizeBodyNode((yyvsp[-1].node), TLookup("int"), "main");
         SaveFunctionAST("main", root, 1);
@@ -2675,467 +2678,467 @@ yyreduce:
         EndFunctionScope();
         (yyval.node) = NULL;
     }
-#line 2679 "exprtree.tab.c"
+#line 2682 "exprtree.tab.c"
     break;
 
   case 104:
-#line 772 "exprtree.y"
+#line 775 "exprtree.y"
                    {
         (yyval.node) = makeConnectorNode((yyvsp[-1].node), (yyvsp[0].node));
     }
-#line 2687 "exprtree.tab.c"
+#line 2690 "exprtree.tab.c"
     break;
 
   case 105:
-#line 775 "exprtree.y"
+#line 778 "exprtree.y"
            {
         (yyval.node) = (yyvsp[0].node);
     }
-#line 2695 "exprtree.tab.c"
+#line 2698 "exprtree.tab.c"
     break;
 
   case 106:
-#line 779 "exprtree.y"
-                 {
-        (yyval.node) = (yyvsp[0].node);
-    }
-#line 2703 "exprtree.tab.c"
-    break;
-
-  case 107:
 #line 782 "exprtree.y"
                  {
         (yyval.node) = (yyvsp[0].node);
     }
-#line 2711 "exprtree.tab.c"
+#line 2706 "exprtree.tab.c"
+    break;
+
+  case 107:
+#line 785 "exprtree.y"
+                 {
+        (yyval.node) = (yyvsp[0].node);
+    }
+#line 2714 "exprtree.tab.c"
     break;
 
   case 108:
-#line 785 "exprtree.y"
+#line 788 "exprtree.y"
               {
         (yyval.node) = (yyvsp[0].node);
     }
-#line 2719 "exprtree.tab.c"
+#line 2722 "exprtree.tab.c"
     break;
 
   case 109:
-#line 788 "exprtree.y"
+#line 791 "exprtree.y"
              {
         (yyval.node) = (yyvsp[0].node);
     }
-#line 2727 "exprtree.tab.c"
+#line 2730 "exprtree.tab.c"
     break;
 
   case 110:
-#line 791 "exprtree.y"
-                {
-        (yyval.node) = (yyvsp[0].node);
-    }
-#line 2735 "exprtree.tab.c"
-    break;
-
-  case 111:
 #line 794 "exprtree.y"
                 {
         (yyval.node) = (yyvsp[0].node);
     }
-#line 2743 "exprtree.tab.c"
+#line 2738 "exprtree.tab.c"
+    break;
+
+  case 111:
+#line 797 "exprtree.y"
+                {
+        (yyval.node) = (yyvsp[0].node);
+    }
+#line 2746 "exprtree.tab.c"
     break;
 
   case 112:
-#line 797 "exprtree.y"
+#line 800 "exprtree.y"
                    {
         (yyval.node) = (yyvsp[0].node);
     }
-#line 2751 "exprtree.tab.c"
+#line 2754 "exprtree.tab.c"
     break;
 
   case 113:
-#line 800 "exprtree.y"
+#line 803 "exprtree.y"
                  {
         (yyval.node) = (yyvsp[0].node);
     }
-#line 2759 "exprtree.tab.c"
+#line 2762 "exprtree.tab.c"
     break;
 
   case 114:
-#line 803 "exprtree.y"
+#line 806 "exprtree.y"
                   {
         (yyval.node) = (yyvsp[0].node);
     }
-#line 2767 "exprtree.tab.c"
+#line 2770 "exprtree.tab.c"
     break;
 
   case 115:
-#line 806 "exprtree.y"
+#line 809 "exprtree.y"
                                               {
         (yyval.node) = makeAllocNode((yyvsp[-5].node));
     }
-#line 2775 "exprtree.tab.c"
+#line 2778 "exprtree.tab.c"
     break;
 
   case 116:
-#line 809 "exprtree.y"
+#line 812 "exprtree.y"
                                            {
         (yyval.node) = makeAllocNode((yyvsp[-5].node));
     }
-#line 2783 "exprtree.tab.c"
+#line 2786 "exprtree.tab.c"
     break;
 
   case 117:
-#line 812 "exprtree.y"
+#line 815 "exprtree.y"
                                                {
         (yyval.node) = makeClassAllocNode((yyvsp[-6].node), (yyvsp[-2].str));
     }
-#line 2791 "exprtree.tab.c"
+#line 2794 "exprtree.tab.c"
     break;
 
   case 118:
-#line 815 "exprtree.y"
+#line 818 "exprtree.y"
                                             {
         (yyval.node) = makeClassAllocNode((yyvsp[-6].node), (yyvsp[-2].str));
     }
-#line 2799 "exprtree.tab.c"
+#line 2802 "exprtree.tab.c"
     break;
 
   case 119:
-#line 818 "exprtree.y"
+#line 821 "exprtree.y"
                                 {
         (yyval.node) = makeFreeNode(makeIdNode((yyvsp[-2].str)));
     }
-#line 2807 "exprtree.tab.c"
+#line 2810 "exprtree.tab.c"
     break;
 
   case 120:
-#line 821 "exprtree.y"
+#line 824 "exprtree.y"
                                    {
         (yyval.node) = makeFreeNode((yyvsp[-2].node));
     }
-#line 2815 "exprtree.tab.c"
+#line 2818 "exprtree.tab.c"
     break;
 
   case 121:
-#line 824 "exprtree.y"
+#line 827 "exprtree.y"
                                         {
         (yyval.node) = makeClassDeleteNode((yyvsp[-2].node));
     }
-#line 2823 "exprtree.tab.c"
+#line 2826 "exprtree.tab.c"
     break;
 
   case 122:
-#line 827 "exprtree.y"
+#line 830 "exprtree.y"
                                      {
         (yyval.node) = makeClassDeleteNode((yyvsp[-2].node));
     }
-#line 2831 "exprtree.tab.c"
+#line 2834 "exprtree.tab.c"
     break;
 
   case 123:
-#line 831 "exprtree.y"
+#line 834 "exprtree.y"
                                             { // u read into a var, like read(b);
         (yyval.node) = makeReadNode((yyvsp[-2].node));
     }
-#line 2839 "exprtree.tab.c"
+#line 2842 "exprtree.tab.c"
     break;
 
   case 124:
-#line 834 "exprtree.y"
+#line 837 "exprtree.y"
                                    {
         (yyval.node) = makeReadNode((yyvsp[-2].node));
     }
-#line 2847 "exprtree.tab.c"
+#line 2850 "exprtree.tab.c"
     break;
 
   case 125:
-#line 839 "exprtree.y"
+#line 842 "exprtree.y"
                                        { // u can write an expression like write(5+8);
         (yyval.node) = makeWriteNode((yyvsp[-2].node));
     }
-#line 2855 "exprtree.tab.c"
+#line 2858 "exprtree.tab.c"
     break;
 
   case 126:
-#line 843 "exprtree.y"
+#line 846 "exprtree.y"
                                       {
         (yyval.node) = makeAssignNode((yyvsp[-3].node), (yyvsp[-1].node));
     }
-#line 2863 "exprtree.tab.c"
+#line 2866 "exprtree.tab.c"
     break;
 
   case 127:
-#line 846 "exprtree.y"
+#line 849 "exprtree.y"
                                {
         (yyval.node) = makeAssignNode((yyvsp[-3].node), (yyvsp[-1].node));
     }
-#line 2871 "exprtree.tab.c"
+#line 2874 "exprtree.tab.c"
     break;
 
   case 128:
-#line 851 "exprtree.y"
+#line 854 "exprtree.y"
                                                             {
         (yyval.node) = makeIfNode((yyvsp[-7].node), (yyvsp[-4].node), (yyvsp[-2].node));
     }
-#line 2879 "exprtree.tab.c"
+#line 2882 "exprtree.tab.c"
     break;
 
   case 129:
-#line 854 "exprtree.y"
+#line 857 "exprtree.y"
                                               {
         (yyval.node) = makeIfNode((yyvsp[-5].node), (yyvsp[-2].node), NULL);
     }
-#line 2887 "exprtree.tab.c"
+#line 2890 "exprtree.tab.c"
     break;
 
   case 130:
-#line 858 "exprtree.y"
+#line 861 "exprtree.y"
                                                         {
         (yyval.node) = makeWhileNode((yyvsp[-5].node), (yyvsp[-2].node));        
     }
-#line 2895 "exprtree.tab.c"
+#line 2898 "exprtree.tab.c"
     break;
 
   case 131:
-#line 862 "exprtree.y"
+#line 865 "exprtree.y"
                             {
         (yyval.node) = makeBreakNode();
     }
-#line 2903 "exprtree.tab.c"
+#line 2906 "exprtree.tab.c"
     break;
 
   case 132:
-#line 866 "exprtree.y"
+#line 869 "exprtree.y"
                                   {
         (yyval.node) = makeContinueNode();
     }
-#line 2911 "exprtree.tab.c"
+#line 2914 "exprtree.tab.c"
     break;
 
   case 133:
-#line 870 "exprtree.y"
+#line 873 "exprtree.y"
                                                     {
         (yyval.node) = makeRepeatNode((yyvsp[-5].node), (yyvsp[-2].node));
     }
-#line 2919 "exprtree.tab.c"
+#line 2922 "exprtree.tab.c"
     break;
 
   case 134:
-#line 874 "exprtree.y"
+#line 877 "exprtree.y"
                                                  {
         (yyval.node) = makeDoWhileNode((yyvsp[-5].node), (yyvsp[-2].node));
     }
-#line 2927 "exprtree.tab.c"
+#line 2930 "exprtree.tab.c"
     break;
 
   case 135:
-#line 878 "exprtree.y"
+#line 881 "exprtree.y"
              {
         (yyval.node) = makeOperatorNode("+", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 2935 "exprtree.tab.c"
+#line 2938 "exprtree.tab.c"
     break;
 
   case 136:
-#line 881 "exprtree.y"
+#line 884 "exprtree.y"
                 {
         (yyval.node) = makeOperatorNode("-", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 2943 "exprtree.tab.c"
+#line 2946 "exprtree.tab.c"
     break;
 
   case 137:
-#line 884 "exprtree.y"
+#line 887 "exprtree.y"
               {
         (yyval.node) = makeOperatorNode("*", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 2951 "exprtree.tab.c"
+#line 2954 "exprtree.tab.c"
     break;
 
   case 138:
-#line 887 "exprtree.y"
+#line 890 "exprtree.y"
               {
         (yyval.node) = makeOperatorNode("/", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 2959 "exprtree.tab.c"
+#line 2962 "exprtree.tab.c"
     break;
 
   case 139:
-#line 890 "exprtree.y"
+#line 893 "exprtree.y"
               {
         (yyval.node) = makeOperatorNode("%", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 2967 "exprtree.tab.c"
+#line 2970 "exprtree.tab.c"
     break;
 
   case 140:
-#line 893 "exprtree.y"
+#line 896 "exprtree.y"
                            {
         (yyval.node) = makeOperatorNode("-", makeNumNode(0), (yyvsp[0].node));
     }
-#line 2975 "exprtree.tab.c"
+#line 2978 "exprtree.tab.c"
     break;
 
   case 141:
-#line 896 "exprtree.y"
+#line 899 "exprtree.y"
                 {
         (yyval.node) = (yyvsp[-1].node);
     }
-#line 2983 "exprtree.tab.c"
+#line 2986 "exprtree.tab.c"
     break;
 
   case 142:
-#line 899 "exprtree.y"
+#line 902 "exprtree.y"
              {
         (yyval.node) = makeOperatorNode("<", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 2991 "exprtree.tab.c"
+#line 2994 "exprtree.tab.c"
     break;
 
   case 143:
-#line 902 "exprtree.y"
+#line 905 "exprtree.y"
              {
         (yyval.node) = makeOperatorNode(">", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 2999 "exprtree.tab.c"
+#line 3002 "exprtree.tab.c"
     break;
 
   case 144:
-#line 905 "exprtree.y"
+#line 908 "exprtree.y"
              {
         (yyval.node) = makeOperatorNode("<=", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 3007 "exprtree.tab.c"
+#line 3010 "exprtree.tab.c"
     break;
 
   case 145:
-#line 908 "exprtree.y"
+#line 911 "exprtree.y"
              {
         (yyval.node) = makeOperatorNode(">=", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 3015 "exprtree.tab.c"
+#line 3018 "exprtree.tab.c"
     break;
 
   case 146:
-#line 911 "exprtree.y"
+#line 914 "exprtree.y"
              {
         (yyval.node) = makeOperatorNode("==", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 3023 "exprtree.tab.c"
+#line 3026 "exprtree.tab.c"
     break;
 
   case 147:
-#line 914 "exprtree.y"
+#line 917 "exprtree.y"
              {
         (yyval.node) = makeOperatorNode("!=", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 3031 "exprtree.tab.c"
+#line 3034 "exprtree.tab.c"
     break;
 
   case 148:
-#line 917 "exprtree.y"
+#line 920 "exprtree.y"
              {
         (yyval.node) = makeOperatorNode("||", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 3039 "exprtree.tab.c"
+#line 3042 "exprtree.tab.c"
     break;
 
   case 149:
-#line 920 "exprtree.y"
+#line 923 "exprtree.y"
               {
         (yyval.node) = makeOperatorNode("&&", (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 3047 "exprtree.tab.c"
+#line 3050 "exprtree.tab.c"
     break;
 
   case 150:
-#line 923 "exprtree.y"
+#line 926 "exprtree.y"
           {
         (yyval.node) = makeNumNode((yyvsp[0].num));
     }
-#line 3055 "exprtree.tab.c"
+#line 3058 "exprtree.tab.c"
     break;
 
   case 151:
-#line 926 "exprtree.y"
+#line 929 "exprtree.y"
              {
         (yyval.node) = makeStrNode((yyvsp[0].str));
     }
-#line 3063 "exprtree.tab.c"
+#line 3066 "exprtree.tab.c"
     break;
 
   case 152:
-#line 929 "exprtree.y"
+#line 932 "exprtree.y"
              {
         (yyval.node) = makeNullNode();
     }
-#line 3071 "exprtree.tab.c"
+#line 3074 "exprtree.tab.c"
     break;
 
   case 153:
-#line 932 "exprtree.y"
+#line 935 "exprtree.y"
                        { // address-of operator returns the address of a variable
         (yyval.node) = makeAddressNode((yyvsp[0].node));
     }
-#line 3079 "exprtree.tab.c"
+#line 3082 "exprtree.tab.c"
     break;
 
   case 154:
-#line 935 "exprtree.y"
+#line 938 "exprtree.y"
                {
         (yyval.node) = (yyvsp[0].node);
     }
-#line 3087 "exprtree.tab.c"
+#line 3090 "exprtree.tab.c"
     break;
 
   case 155:
-#line 938 "exprtree.y"
+#line 941 "exprtree.y"
             {
         (yyval.node) = (yyvsp[0].node);
     }
-#line 3095 "exprtree.tab.c"
+#line 3098 "exprtree.tab.c"
     break;
 
   case 156:
-#line 941 "exprtree.y"
+#line 944 "exprtree.y"
                     {
         (yyval.node) = (yyvsp[0].node);
     }
-#line 3103 "exprtree.tab.c"
+#line 3106 "exprtree.tab.c"
     break;
 
   case 157:
-#line 944 "exprtree.y"
+#line 947 "exprtree.y"
                {
         (yyval.node) = makeFunctionCallNode((yyvsp[-2].str), NULL);
     }
-#line 3111 "exprtree.tab.c"
+#line 3114 "exprtree.tab.c"
     break;
 
   case 158:
-#line 947 "exprtree.y"
+#line 950 "exprtree.y"
                       {
         (yyval.node) = makeFunctionCallNode((yyvsp[-3].str), (yyvsp[-1].node));
     }
-#line 3119 "exprtree.tab.c"
+#line 3122 "exprtree.tab.c"
     break;
 
   case 159:
-#line 951 "exprtree.y"
+#line 954 "exprtree.y"
                                              {
                   (yyval.node) = makeMethodCallNode((yyvsp[-3].node), (yyvsp[-1].node));
               }
-#line 3127 "exprtree.tab.c"
+#line 3130 "exprtree.tab.c"
     break;
 
   case 160:
-#line 954 "exprtree.y"
+#line 957 "exprtree.y"
                                      {
                   (yyval.node) = makeMethodCallNode((yyvsp[-2].node), NULL);
               }
-#line 3135 "exprtree.tab.c"
+#line 3138 "exprtree.tab.c"
     break;
 
 
-#line 3139 "exprtree.tab.c"
+#line 3142 "exprtree.tab.c"
 
       default: break;
     }
@@ -3367,7 +3370,7 @@ yyreturn:
 #endif
   return yyresult;
 }
-#line 959 "exprtree.y"
+#line 962 "exprtree.y"
 
 
 extern FILE* yyin; // it is file pointer of lexer. defaulted to "stdin"
