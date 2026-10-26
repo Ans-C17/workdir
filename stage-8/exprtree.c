@@ -182,10 +182,14 @@ Classtable *CLookup(char *name) {
 
 Classtable *CInstall(char *name, char *parentClassName) {
     Classtable *entry;
+    Classtable *parent = NULL;
 
-    /* Stage 7 has no inheritance; callers must pass NULL for the parent. */
-    if (name == NULL || parentClassName != NULL || TLookup(name) != NULL ||
-        CLookup(name) != NULL) return NULL;
+    if (name == NULL || TLookup(name) != NULL || CLookup(name) != NULL)
+        return NULL;
+    if (parentClassName != NULL) {
+        parent = CLookup(parentClassName);
+        if (parent == NULL) return NULL;
+    }
 
     entry = calloc(1, sizeof(Classtable));
     if (entry == NULL) return NULL;
@@ -194,7 +198,7 @@ Classtable *CInstall(char *name, char *parentClassName) {
         free(entry);
         return NULL;
     }
-    entry->parentptr = NULL;
+    entry->parentptr = parent;
     entry->classIndex = nextClassIndex++;
 
     if (Chead == NULL) Chead = entry;

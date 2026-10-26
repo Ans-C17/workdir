@@ -90,7 +90,7 @@ static void CheckClassFieldOrder(void) {
 
 /* ExpL user-defined types and heap operations (semantic support is pending). */
 %token TYPE ENDTYPE ALLOC FREE
-%token CLASS ENDCLASS SELF NEW DELETE
+%token CLASS ENDCLASS EXTENDS SELF NEW DELETE
 %token T_NULL
 
 %token T_BEGIN T_END 
@@ -110,6 +110,7 @@ static void CheckClassFieldOrder(void) {
 // 2. non terminal -> %TYPE (not required if no semantic value)
 
 %type <node> Program MainBlock Body ReturnStmt ArgList Slist Stmt InputStmt OutputStmt AsgStmt E Variable Field MemberAccess FieldFunction
+%type <str> ClassParentOpt
 %type <node> IfStmt WhileStmt
 %type <node> BreakStmt ContinueStmt
 %type <node> RepeatStmt DoWhileStmt
@@ -158,10 +159,10 @@ ClassDefList : ClassDefList ClassDef
              | ClassDef
              ;
 
-ClassDef : ID {
-              currentClass = CInstall($1, NULL);
+ClassDef : ID ClassParentOpt {
+              currentClass = CInstall($1, $2);
               if (currentClass == NULL) {
-                  fprintf(stderr, "Error: class '%s' is already defined or cannot be installed\n", $1);
+                  fprintf(stderr, "Error: class '%s' is already defined, has an invalid parent, or cannot be installed\n", $1);
                   exit(1);
               }
           } '{' DECL ClassMemberDecls ENDDECL ClassMethodDefList '}' {
@@ -356,6 +357,10 @@ TypeName : INT { $$ = TLookup("int"); }
              $$ = resolvedType;
          }
          ;
+
+ClassParentOpt : EXTENDS ID { $$ = $2; }
+               | /* empty */ { $$ = NULL; }
+               ;
 
 FType : TypeName { $$ = $1; }
       | TypeName MUL {

@@ -57,6 +57,7 @@ void yyerror(const char* s);
 "endtype" { return ENDTYPE; }
 "class" { return CLASS; }
 "endclass" { return ENDCLASS; }
+"extends" { return EXTENDS; }
 "self" { return SELF; }
 "NULL" { return T_NULL; }
 
