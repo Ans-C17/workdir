@@ -130,12 +130,25 @@ static int isDirectClassVariable(tnode *t) {
            (t->Gentry != NULL || t->Lentry != NULL);
 }
 
-/* Direct class variables store [member pointer, vtable pointer]. */
+static int isClassValueLocation(tnode *t) {
+    return isDirectClassVariable(t) ||
+           (t != NULL && t->nodetype == NODE_FIELD && t->classType != NULL &&
+            t->Fentry != NULL);
+}
+
+/* Class values store [member pointer, vtable pointer]. */
 static int classVTableAddress(tnode *t) {
     int addressReg;
 
+    if (t != NULL && t->nodetype == NODE_FIELD && t->classType != NULL &&
+        t->Fentry != NULL) {
+        addressReg = lvalueAddress(t);
+        fprintf(targetFile, "ADD R%d, 1\n", addressReg);
+        return addressReg;
+    }
+
     if (!isDirectClassVariable(t)) {
-        fprintf(stderr, "Error: class value does not have a direct pair binding\n");
+        fprintf(stderr, "Error: class value does not have a pair binding\n");
         exit(1);
     }
 
@@ -158,16 +171,6 @@ static int classVTableValue(tnode *t) {
     if (t != NULL && t->nodetype == NODE_NULL) {
         addressReg = getReg();
         fprintf(targetFile, "MOV R%d, 0\n", addressReg);
-        return addressReg;
-    }
-
-    /* Class-valued fields still occupy one word in the current fixed-size
-       object layout. Until that layout is widened, use their declared class
-       table so existing field-based calls and arguments remain compilable. */
-    if (t != NULL && t->nodetype == NODE_FIELD && t->classType != NULL) {
-        addressReg = getReg();
-        fprintf(targetFile, "MOV R%d, %d\n", addressReg,
-                4096 + t->classType->classIndex * 8);
         return addressReg;
     }
 
@@ -457,18 +460,18 @@ int codeGen(tnode *t) {
         return methodCall(t);
 
     case NODE_ASSIGN:
-        if (isDirectClassVariable(t->left) &&
-            (isDirectClassVariable(t->right) ||
-             (t->right != NULL && t->right->nodetype == NODE_FIELD &&
-              t->right->classType != NULL) ||
+        if (isClassValueLocation(t->left) &&
+            (isClassValueLocation(t->right) ||
              (t->right != NULL && t->right->nodetype == NODE_NULL))) {
             int tableReg = classVTableValue(t->right);
             resultReg = codeGen(t->right);
             addressReg = lvalueAddress(t->left);
             fprintf(targetFile, "MOV [R%d], R%d\n", addressReg, resultReg);
-            fprintf(targetFile, "ADD R%d, %d\n", addressReg,
-                    t->left->Lentry != NULL && t->left->Lentry->binding < 0 ? -1 : 1);
-            fprintf(targetFile, "MOV [R%d], R%d\n", addressReg, tableReg);
+            {
+                int tableAddress = classVTableAddress(t->left);
+                fprintf(targetFile, "MOV [R%d], R%d\n", tableAddress, tableReg);
+                freeReg();
+            }
             freeReg();
             freeReg();
             freeReg();
@@ -495,13 +498,15 @@ int codeGen(tnode *t) {
         emitAlloc(resultReg, resultReg - 1, allocationSize);
         addressReg = lvalueAddress(t->left);
         fprintf(targetFile, "MOV [R%d], R%d\n", addressReg, resultReg);
-        if (t->classType != NULL && isDirectClassVariable(t->left)) {
+        if (t->classType != NULL && isClassValueLocation(t->left)) {
             int tableReg = getReg();
             fprintf(targetFile, "MOV R%d, %d\n", tableReg,
                     4096 + t->classType->classIndex * 8);
-            fprintf(targetFile, "ADD R%d, %d\n", addressReg,
-                    t->left->Lentry != NULL && t->left->Lentry->binding < 0 ? -1 : 1);
-            fprintf(targetFile, "MOV [R%d], R%d\n", addressReg, tableReg);
+            {
+                int tableAddress = classVTableAddress(t->left);
+                fprintf(targetFile, "MOV [R%d], R%d\n", tableAddress, tableReg);
+                freeReg();
+            }
             freeReg();
         }
         freeReg();

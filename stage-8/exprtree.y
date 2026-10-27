@@ -71,7 +71,7 @@ static void InstallDeclaredClassField(char *typeName, char *fieldName) {
     }
 
     if (Class_Finstall(currentClass, typeName, fieldName) == NULL) {
-        fprintf(stderr, "Error: field '%s %s' is invalid, duplicated, or exceeds the 8-field limit in class '%s'\n",
+        fprintf(stderr, "Error: field '%s %s' is invalid, duplicated, or exceeds the 8-field/8-word limit in class '%s'\n",
                 typeName, fieldName, currentClass == NULL ? "?" : currentClass->name);
         exit(1);
     }
@@ -559,7 +559,10 @@ Variable : ID {
     };
 
 /* Share the member prefix so fields and method calls resolve through one path. */
-Field : MemberAccess { $$ = makeFieldValueNode($1); };
+/* Keep a member access unresolved while it may still be a method-call prefix.
+   Validate that it is a field only at the point where it is used as a value
+   or an lvalue. */
+Field : MemberAccess { $$ = $1; };
 
 MemberAccess : SELF '.' ID {
                  $$ = makeMemberAccessNode(makeIdNode("self"), $3);
@@ -810,32 +813,32 @@ Stmt : InputStmt {
         $$ = makeAllocNode($1);
     }
     | Field ASSIGN ALLOC '(' ')' SEMICOLON {
-        $$ = makeAllocNode($1);
+        $$ = makeAllocNode(makeFieldValueNode($1));
     }
     | Variable ASSIGN NEW '(' ID ')' SEMICOLON {
         $$ = makeClassAllocNode($1, $5);
     }
     | Field ASSIGN NEW '(' ID ')' SEMICOLON {
-        $$ = makeClassAllocNode($1, $5);
+        $$ = makeClassAllocNode(makeFieldValueNode($1), $5);
     }
     | FREE '(' ID ')' SEMICOLON {
         $$ = makeFreeNode(makeIdNode($3));
     }
     | FREE '(' Field ')' SEMICOLON {
-        $$ = makeFreeNode($3);
+        $$ = makeFreeNode(makeFieldValueNode($3));
     }
     | DELETE '(' Variable ')' SEMICOLON {
         $$ = makeClassDeleteNode($3);
     }
     | DELETE '(' Field ')' SEMICOLON {
-        $$ = makeClassDeleteNode($3);
+        $$ = makeClassDeleteNode(makeFieldValueNode($3));
     };
     
 InputStmt : READ '(' Variable ')' SEMICOLON { // u read into a var, like read(b);
         $$ = makeReadNode($3);
     }
     | READ '(' Field ')' SEMICOLON {
-        $$ = makeReadNode($3);
+        $$ = makeReadNode(makeFieldValueNode($3));
     }
     ;
 
@@ -847,7 +850,7 @@ AsgStmt : Variable ASSIGN E SEMICOLON {
         $$ = makeAssignNode($1, $3);
     }
     | Field ASSIGN E SEMICOLON {
-        $$ = makeAssignNode($1, $3);
+        $$ = makeAssignNode(makeFieldValueNode($1), $3);
     }
     ;
 
@@ -939,7 +942,7 @@ E : E PLUS E {
         $$ = $1;
     }
     | Field {
-        $$ = $1;
+        $$ = makeFieldValueNode($1);
     }
     | FieldFunction {
         $$ = $1;

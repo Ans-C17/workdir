@@ -102,6 +102,7 @@ struct Classtable {
     Classtable *parentptr;      // NULL in stage 7; inheritance comes in stage 8
     int classIndex;
     int fieldCount;
+    int fieldWords;             // object words used by fields (class references use two)
     int methodCount;
     Classtable *next;
 };

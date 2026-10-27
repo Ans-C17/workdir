@@ -1,45 +1,101 @@
 class
-A {
+Person {
     decl
-        int x;
-        int get();
+        str name;
+        int age;
+        int printDetails();
+        str findName();
+        int createPerson(str name, int age);
     enddecl
 
-    int get() {
+    int printDetails() {
         decl
         enddecl
         begin
-            return self.x;
+            write(self.name);
+            write(self.age);
+            return 1;
+        end
+    }
+
+    str findName() {
+        decl
+        enddecl
+        begin
+            return self.name;
+        end
+    }
+
+    int createPerson(str name, int age) {
+        decl
+        enddecl
+        begin
+            self.name = name;
+            self.age = age;
+            return 1;
         end
     }
 }
-
-B extends A {
+Student extends Person {
     decl
-        int get();
+        int rollnumber;
+        str dept;
+        int printDetails();
+        int createStudent(str name, int age, int rollNo, str dept);
     enddecl
 
-    int get() {
+    int createStudent(str name, int age, int rollNo, str dept) {
         decl
         enddecl
         begin
-            return 20;
+            self.name = name;
+            self.age = age;
+            self.rollnumber = rollNo;
+            self.dept = dept;
+            return 1;
+        end
+    }
+
+    int printDetails() {
+        decl
+        enddecl
+        begin
+            write(self.name);
+            write(self.age);
+            write(self.rollnumber);
+            write(self.dept);
+            return 1;
         end
     }
 }
 endclass
 
 decl
-    A a;
+    int n, temp;
+    Person first;
+    Student second;
+    Person arbitrary;
 enddecl
 
-int main()
-{
+int main() {
     decl
     enddecl
     begin
-        a = new(B);
-        write(a.get());
+        first = new(Person);
+        temp = first.createPerson("Rogers", 37);
+
+        second = new(Student);
+        temp = second.createStudent("Mathew", 35, 999, "CS");
+
+        read(n);
+
+        if (n > 0) then
+            arbitrary = first;
+        else
+            arbitrary = second;
+        endif;
+
+        n = arbitrary.printDetails();
         return 0;
     end
 }

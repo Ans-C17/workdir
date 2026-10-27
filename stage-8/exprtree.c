@@ -287,6 +287,7 @@ static int CopyInheritedMembers(Classtable *child, Classtable *parent) {
         *fieldTail = copy;
         fieldTail = &copy->next;
         child->fieldCount++;
+        child->fieldWords += sourceField->classType != NULL ? 2 : 1;
     }
 
     for (sourceMethod = parent->vfuncptr; sourceMethod != NULL;
@@ -369,6 +370,7 @@ Fieldlist *Class_Finstall(Classtable *classEntry, char *typeName, char *fieldNam
     Fieldlist *field, *tail;
     Typetable *fieldType;
     Classtable *fieldClass;
+    int fieldWords;
 
     if (classEntry == NULL || typeName == NULL || fieldName == NULL ||
         classEntry->fieldCount >= 8 || Class_Flookup(classEntry, fieldName) != NULL ||
@@ -379,6 +381,8 @@ Fieldlist *Class_Finstall(Classtable *classEntry, char *typeName, char *fieldNam
     fieldType = TLookup(typeName);
     fieldClass = fieldType == NULL ? CLookup(typeName) : NULL;
     if (fieldType == NULL && fieldClass == NULL) return NULL;
+    fieldWords = fieldClass != NULL ? 2 : 1;
+    if (classEntry->fieldWords + fieldWords > 8) return NULL;
 
     field = calloc(1, sizeof(Fieldlist));
     if (field == NULL) return NULL;
@@ -387,7 +391,9 @@ Fieldlist *Class_Finstall(Classtable *classEntry, char *typeName, char *fieldNam
         free(field);
         return NULL;
     }
-    field->fieldIndex = classEntry->fieldCount++;
+    field->fieldIndex = classEntry->fieldWords;
+    classEntry->fieldCount++;
+    classEntry->fieldWords += fieldWords;
     field->type = fieldType;
     field->classType = fieldClass;
 
@@ -533,7 +539,7 @@ void PrintClassTable(void) {
 
     printf("\nClass Field Table\n");
     printf("%-20s %-12s %-24s %s\n",
-           "Class", "Field index", "Field name", "Field type");
+           "Class", "Word offset", "Field name", "Field type");
     printf("%-20s %-12s %-24s %s\n",
            "--------------------", "------------", "------------------------", "----------");
     for (classEntry = Chead; classEntry != NULL; classEntry = classEntry->next) {
