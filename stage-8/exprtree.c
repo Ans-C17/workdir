@@ -714,8 +714,9 @@ void InstallClassVariable(char *name, Classtable *classType) {
         exit(1);
     }
     entry->classType = classType;
-    entry->size = 1;
-    entry->binding = nextBinding++;
+    entry->size = 2;
+    entry->binding = nextBinding;
+    nextBinding += 2;
     entry->flabel = -1;
 
     if (Ghead == NULL) Ghead = entry;
@@ -831,8 +832,10 @@ void BeginFunctionScope(Paramstruct *paramlist) {
     Lhead = NULL;
     nextLocalBinding = 1;
     while (paramlist != NULL) {
+        int parameterSize = paramlist->classType != NULL ? 2 : 1;
         LInstall(paramlist->name, paramlist->type, parameterBinding--,
-                 1, 0, 0, 0, paramlist->classType);
+                 parameterSize, 0, 0, 0, paramlist->classType);
+        if (parameterSize == 2) parameterBinding--;
         paramlist = paramlist->next;
     }
 }
@@ -847,13 +850,16 @@ void BeginMethodScope(Paramstruct *paramlist, Classtable *classEntry) {
         fprintf(stderr, "Error: cannot begin a method scope without a class\n");
         exit(1);
     }
-    for (param = paramlist; param != NULL; param = param->next) parameterCount++;
+    for (param = paramlist; param != NULL; param = param->next)
+        parameterCount += param->classType != NULL ? 2 : 1;
     Lhead = NULL;
     nextLocalBinding = 1;
     LInstall("self", NULL, -(parameterCount + 3), 1, 0, 0, 0, classEntry);
     while (paramlist != NULL) {
+        int parameterSize = paramlist->classType != NULL ? 2 : 1;
         LInstall(paramlist->name, paramlist->type, parameterBinding--,
-                 1, 0, 0, 0, paramlist->classType);
+                 parameterSize, 0, 0, 0, paramlist->classType);
+        if (parameterSize == 2) parameterBinding--;
         paramlist = paramlist->next;
     }
     activeMethodClass = classEntry;
@@ -882,8 +888,8 @@ void InstallLocalClassVariables(VarList *varlist, Classtable *classType) {
             exit(1);
         }
         LInstall(varlist->name, NULL, nextLocalBinding,
-                 1, 0, 0, 0, classType);
-        nextLocalBinding++;
+                 2, 0, 0, 0, classType);
+        nextLocalBinding += 2;
         varlist = varlist->next;
     }
 }

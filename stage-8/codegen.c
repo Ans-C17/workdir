@@ -125,6 +125,54 @@ static int lvalueAddress(tnode *t) {
     }
 }
 
+static int isDirectClassVariable(tnode *t) {
+    return t != NULL && t->classType != NULL && t->nodetype == NODE_ID &&
+           (t->Gentry != NULL || t->Lentry != NULL);
+}
+
+/* Direct class variables store [member pointer, vtable pointer]. */
+static int classVTableAddress(tnode *t) {
+    int addressReg;
+
+    if (!isDirectClassVariable(t)) {
+        fprintf(stderr, "Error: class value does not have a direct pair binding\n");
+        exit(1);
+    }
+
+    addressReg = idAddress(t);
+    if (t->Lentry != NULL) {
+        fprintf(targetFile, "ADD R%d, %d\n", addressReg,
+                t->Lentry->binding > 0 ? 1 : -1);
+    } else {
+        fprintf(targetFile, "ADD R%d, 1\n", addressReg);
+    }
+    return addressReg;
+}
+
+static int classVTableValue(tnode *t) {
+    int addressReg;
+
+    if (t != NULL && t->nodetype == NODE_NULL) {
+        addressReg = getReg();
+        fprintf(targetFile, "MOV R%d, 0\n", addressReg);
+        return addressReg;
+    }
+
+    /* Class-valued fields still occupy one word in the current fixed-size
+       object layout. Until that layout is widened, use their declared class
+       table so existing field-based calls and arguments remain compilable. */
+    if (t != NULL && t->nodetype == NODE_FIELD && t->classType != NULL) {
+        addressReg = getReg();
+        fprintf(targetFile, "MOV R%d, %d\n", addressReg,
+                4096 + t->classType->classIndex * 8);
+        return addressReg;
+    }
+
+    addressReg = classVTableAddress(t);
+    fprintf(targetFile, "MOV R%d, [R%d]\n", addressReg, addressReg);
+    return addressReg;
+}
+
 static void emitExit(void) {
     fprintf(targetFile, "MOV R19, \"Exit\"\n");
     fprintf(targetFile, "PUSH R19\nPUSH R19\nPUSH R19\nPUSH R19\nPUSH R19\n");
@@ -202,32 +250,49 @@ static void emitRead(tnode *variable) {
     freeReg();
 }
 
-static void pushArgs(tnode *arguments) {
+static void pushArgs(tnode *arguments, Paramstruct *parameters) {
     int valueReg;
 
     if (arguments == NULL) {
         return;
     }
 
-    pushArgs(arguments->right);
+    pushArgs(arguments->right, parameters->next);
+    if (parameters->classType != NULL) {
+        int tableReg;
+
+        if (arguments->left != NULL && arguments->left->nodetype == NODE_NULL) {
+            fprintf(targetFile, "MOV R19, 0\nPUSH R19\nPUSH R19\n");
+            return;
+        }
+        tableReg = classVTableValue(arguments->left);
+        valueReg = codeGen(arguments->left);
+        /* Push the second word first, leaving the member pointer at the
+           parameter's base binding in the callee. */
+        fprintf(targetFile, "PUSH R%d\nPUSH R%d\n", tableReg, valueReg);
+        freeReg();
+        freeReg();
+        return;
+    }
+
     valueReg = codeGen(arguments->left);
     fprintf(targetFile, "PUSH R%d\n", valueReg);
     freeReg();
 }
 
-static int argCount(tnode *arguments) {
+static int argWordCount(Paramstruct *parameters) {
     int count = 0;
 
-    while (arguments != NULL) {
-        ++count;
-        arguments = arguments->right;
+    while (parameters != NULL) {
+        count += parameters->classType != NULL ? 2 : 1;
+        parameters = parameters->next;
     }
     return count;
 }
 
 static int functionCall(tnode *t) {
     int savedTop = reg;
-    int arguments = argCount(t->arglist);
+    int arguments = argWordCount(t->Gentry->paramlist);
     int i;
     int resultReg;
 
@@ -235,7 +300,7 @@ static int functionCall(tnode *t) {
         fprintf(targetFile, "PUSH R%d\n", i);
     }
 
-    pushArgs(t->arglist);
+    pushArgs(t->arglist, t->Gentry->paramlist);
     fprintf(targetFile, "PUSH R19\n");
     fprintf(targetFile, "CALL F%d\n", t->Gentry->flabel);
 
@@ -256,7 +321,7 @@ static int functionCall(tnode *t) {
  * and must be pushed before the declared arguments. */
 static int methodCall(tnode *t) {
     int savedTop = reg;
-    int arguments = argCount(t->arglist);
+    int arguments = argWordCount(t->Mentry->paramlist);
     int receiverReg;
     int resultReg;
     int i;
@@ -274,7 +339,7 @@ static int methodCall(tnode *t) {
     fprintf(targetFile, "PUSH R%d\n", receiverReg);
     freeReg();
 
-    pushArgs(t->arglist);
+    pushArgs(t->arglist, t->Mentry->paramlist);
     fprintf(targetFile, "PUSH R19\n");
     fprintf(targetFile, "CALL F%d\n", t->Mentry->flabel);
 
@@ -382,6 +447,23 @@ int codeGen(tnode *t) {
         return methodCall(t);
 
     case NODE_ASSIGN:
+        if (isDirectClassVariable(t->left) &&
+            (isDirectClassVariable(t->right) ||
+             (t->right != NULL && t->right->nodetype == NODE_FIELD &&
+              t->right->classType != NULL) ||
+             (t->right != NULL && t->right->nodetype == NODE_NULL))) {
+            int tableReg = classVTableValue(t->right);
+            resultReg = codeGen(t->right);
+            addressReg = lvalueAddress(t->left);
+            fprintf(targetFile, "MOV [R%d], R%d\n", addressReg, resultReg);
+            fprintf(targetFile, "ADD R%d, %d\n", addressReg,
+                    t->left->Lentry != NULL && t->left->Lentry->binding < 0 ? -1 : 1);
+            fprintf(targetFile, "MOV [R%d], R%d\n", addressReg, tableReg);
+            freeReg();
+            freeReg();
+            freeReg();
+            return -1;
+        }
         resultReg = codeGen(t->right);
         addressReg = lvalueAddress(t->left);
         fprintf(targetFile, "MOV [R%d], R%d\n", addressReg, resultReg);
@@ -403,6 +485,15 @@ int codeGen(tnode *t) {
         emitAlloc(resultReg, resultReg - 1, allocationSize);
         addressReg = lvalueAddress(t->left);
         fprintf(targetFile, "MOV [R%d], R%d\n", addressReg, resultReg);
+        if (t->classType != NULL && isDirectClassVariable(t->left)) {
+            int tableReg = getReg();
+            fprintf(targetFile, "MOV R%d, %d\n", tableReg,
+                    4096 + t->classType->classIndex * 8);
+            fprintf(targetFile, "ADD R%d, %d\n", addressReg,
+                    t->left->Lentry != NULL && t->left->Lentry->binding < 0 ? -1 : 1);
+            fprintf(targetFile, "MOV [R%d], R%d\n", addressReg, tableReg);
+            freeReg();
+        }
         freeReg();
         freeReg();
         return -1;
