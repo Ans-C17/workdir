@@ -199,6 +199,7 @@ void TFinishDefinition(Typetable *type);
 
 Classtable *CInstall(char *name, char *parentClassName);
 Classtable *CLookup(char *name);
+Classtable *CGetHead(void);
 Fieldlist *Class_Finstall(Classtable *classEntry, char *typeName, char *fieldName);
 Memberfunclist *Class_Minstall(Classtable *classEntry, char *name,
                                Typetable *returnType, Paramstruct *paramlist);

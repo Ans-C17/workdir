@@ -41,6 +41,16 @@ int findLabelAddress(char* name) {
     exit(1);
 }
 
+static int isFunctionLabel(const char *name) {
+    const char *digit;
+
+    if (name == NULL || name[0] != 'F' || name[1] == '\0') return 0;
+    for (digit = name + 1; *digit != '\0'; ++digit) {
+        if (!isdigit((unsigned char)*digit)) return 0;
+    }
+    return 1;
+}
+
 // check if its a label
 // normal instructions do not contain colon
 int isLabel(char* line, char* label) {
@@ -122,6 +132,19 @@ void secondPass(FILE* input, FILE* output) {
             if ((strcmp(instruction, "JMP") == 0 || strcmp(instruction, "CALL") == 0) &&
                 isalpha((unsigned char)operand[0])) {
                 fprintf(output, "%s %d\n", instruction, findLabelAddress(operand));
+                continue;
+            }
+        }
+
+        /* Translate method labels loaded as values for virtual tables. */
+        char destination[20];
+        char source[20];
+        if (sscanf(line, "%19s %19[^,], %19s", instruction,
+                   destination, source) == 3) {
+            source[strcspn(source, "\r\n")] = '\0';
+            if (strcmp(instruction, "MOV") == 0 && isFunctionLabel(source)) {
+                fprintf(output, "%s %s, %d\n", instruction, destination,
+                        findLabelAddress(source));
                 continue;
             }
         }

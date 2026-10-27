@@ -180,6 +180,10 @@ Classtable *CLookup(char *name) {
     return NULL;
 }
 
+Classtable *CGetHead(void) {
+    return Chead;
+}
+
 static int IsSameOrDerivedClass(Classtable *candidate, Classtable *expected) {
     while (candidate != NULL) {
         if (candidate == expected) return 1;

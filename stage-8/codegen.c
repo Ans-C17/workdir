@@ -523,6 +523,26 @@ static void prologue(int localCount) {
     }
 }
 
+static void initializeVirtualFunctionTables(void) {
+    Classtable *classEntry;
+
+    fprintf(targetFile, "MOV R0, 0\n");
+    for (classEntry = CGetHead(); classEntry != NULL; classEntry = classEntry->next) {
+        Memberfunclist *method;
+        int slot;
+        int tableBase = 4096 + classEntry->classIndex * 8;
+
+        for (slot = 0; slot < 8; ++slot) {
+            fprintf(targetFile, "MOV [%d], R0\n", tableBase + slot);
+        }
+        for (method = classEntry->vfuncptr; method != NULL; method = method->next) {
+            int entryAddress = tableBase + method->funcposition;
+            fprintf(targetFile, "MOV R1, F%d\n", method->flabel);
+            fprintf(targetFile, "MOV [%d], R1\n", entryAddress);
+        }
+    }
+}
+
 void generateProgram(FunctionAST *functions) {
     FunctionAST *function;
     MethodAST *method;
@@ -532,6 +552,7 @@ void generateProgram(FunctionAST *functions) {
     fprintf(targetFile, "MOV SP, %d\n", nextBinding - 1);
     emitHeapInit();
     fprintf(targetFile, "MOV R0, 0\n");
+    initializeVirtualFunctionTables();
     fprintf(targetFile, "JMP MAIN\n");
 
     /* Methods have their own AST list and labels assigned at declaration. */
