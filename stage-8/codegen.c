@@ -316,12 +316,11 @@ static int functionCall(tnode *t) {
     return resultReg;
 }
 
-/* Stage 7 has no inheritance, so a method call uses the statically resolved
- * label stored in the class table. The receiver is the implicit self argument
- * and must be pushed before the declared arguments. */
+/* Resolve the method through the receiver's runtime virtual function table. */
 static int methodCall(tnode *t) {
     int savedTop = reg;
-    int arguments = argWordCount(t->Mentry->paramlist);
+    int arguments;
+    int tableReg;
     int receiverReg;
     int resultReg;
     int i;
@@ -330,25 +329,33 @@ static int methodCall(tnode *t) {
         fprintf(stderr, "Error: method call is missing its method or receiver\n");
         exit(1);
     }
+    arguments = argWordCount(t->Mentry->paramlist);
 
     for (i = 0; i <= savedTop; ++i) {
         fprintf(targetFile, "PUSH R%d\n", i);
     }
 
+    tableReg = classVTableValue(t->left);
+    /* Push both implicit receiver values before the explicit parameters. */
+    fprintf(targetFile, "PUSH R%d\n", tableReg);
     receiverReg = codeGen(t->left);
     fprintf(targetFile, "PUSH R%d\n", receiverReg);
     freeReg();
 
+    fprintf(targetFile, "ADD R%d, %d\n", tableReg, t->Mentry->funcposition);
+    fprintf(targetFile, "MOV R%d, [R%d]\n", tableReg, tableReg);
+
     pushArgs(t->arglist, t->Mentry->paramlist);
     fprintf(targetFile, "PUSH R19\n");
-    fprintf(targetFile, "CALL F%d\n", t->Mentry->flabel);
+    fprintf(targetFile, "CALL R%d\n", tableReg);
 
+    freeReg(); /* dynamically loaded method address */
     resultReg = getReg();
     fprintf(targetFile, "POP R%d\n", resultReg);
     while (arguments-- > 0) {
         fprintf(targetFile, "POP R19\n");
     }
-    fprintf(targetFile, "POP R19\n"); /* implicit self */
+    fprintf(targetFile, "POP R19\nPOP R19\n"); /* self object and vtable */
     for (i = savedTop; i >= 0; --i) {
         fprintf(targetFile, "POP R%d\n", i);
     }
