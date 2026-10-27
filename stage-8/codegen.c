@@ -139,12 +139,15 @@ static int classVTableAddress(tnode *t) {
         exit(1);
     }
 
-    addressReg = idAddress(t);
     if (t->Lentry != NULL) {
+        addressReg = getReg();
+        fprintf(targetFile, "MOV R%d, BP\n", addressReg);
         fprintf(targetFile, "ADD R%d, %d\n", addressReg,
-                t->Lentry->binding > 0 ? 1 : -1);
+                t->Lentry->vtableBinding);
     } else {
-        fprintf(targetFile, "ADD R%d, 1\n", addressReg);
+        addressReg = getReg();
+        fprintf(targetFile, "MOV R%d, %d\n", addressReg,
+                t->Gentry->binding + 1);
     }
     return addressReg;
 }

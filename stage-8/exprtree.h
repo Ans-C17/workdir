@@ -138,6 +138,7 @@ typedef struct Lsymbol {
     Typetable *type;
     Classtable *classType;       // non-NULL for class-typed locals, parameters, or self
     int binding;
+    int vtableBinding;            // BP-relative slot for the second word of a class value
     int size;
     int rows;
     int cols;

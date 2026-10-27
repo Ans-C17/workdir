@@ -808,6 +808,8 @@ static void LInstall(char *name, Typetable *type, int binding,
     entry->type = type;
     entry->classType = classType;
     entry->binding = binding;
+    entry->vtableBinding = classType == NULL ? 0 :
+                          (binding > 0 ? binding + 1 : binding - 1);
     entry->size = size;
     entry->rows = rows;
     entry->cols = cols;
@@ -840,7 +842,8 @@ void BeginFunctionScope(Paramstruct *paramlist) {
     }
 }
 
-/* self is the implicit first argument, followed by the declared parameters. */
+/* The hidden table pointer and self pointer precede declared parameters.
+   The table pointer is pushed first, so it occupies self's binding minus one. */
 void BeginMethodScope(Paramstruct *paramlist, Classtable *classEntry) {
     int parameterBinding = -3;
     int parameterCount = 0;
@@ -854,7 +857,7 @@ void BeginMethodScope(Paramstruct *paramlist, Classtable *classEntry) {
         parameterCount += param->classType != NULL ? 2 : 1;
     Lhead = NULL;
     nextLocalBinding = 1;
-    LInstall("self", NULL, -(parameterCount + 3), 1, 0, 0, 0, classEntry);
+    LInstall("self", NULL, -(parameterCount + 3), 2, 0, 0, 0, classEntry);
     while (paramlist != NULL) {
         int parameterSize = paramlist->classType != NULL ? 2 : 1;
         LInstall(paramlist->name, paramlist->type, parameterBinding--,
