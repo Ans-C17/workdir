@@ -331,7 +331,7 @@ Classtable *CInstall(char *name, char *parentClassName) {
         return NULL;
     }
     entry->parentptr = parent;
-    entry->classIndex = nextClassIndex++;
+    entry->classIndex = nextClassIndex;
 
     if (parent != NULL && !CopyInheritedMembers(entry, parent)) {
         FreeClassMembers(entry);
@@ -339,6 +339,12 @@ Classtable *CInstall(char *name, char *parentClassName) {
         free(entry);
         return NULL;
     }
+
+    /* Reserve eight stack words for this class's virtual function table.
+       Classes are installed before global declarations, so globals are
+       allocated immediately after all class tables. */
+    nextBinding += 8;
+    nextClassIndex++;
 
     if (Chead == NULL) Chead = entry;
     else Ctail->next = entry;
