@@ -54,7 +54,7 @@ int main() {
         int x;
     enddecl
     begin
-        write("Enter 1 for Rectangle, 2 for Square");
+        write("1=rect, 2=sqr");
         read(x);
 
         if (x == 1) then

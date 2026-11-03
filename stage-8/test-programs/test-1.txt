@@ -27,6 +27,7 @@ A {
         end
     }
 }
+
 B extends A {
     decl
         int f1();
@@ -45,16 +46,20 @@ B extends A {
 endclass
 
 decl
+    int n;
     A obj;
 enddecl
 
 int main() {
     decl
-        int n;
     enddecl
     begin
-        n = -1;
-        obj = new(B);
+        read(n);
+        if (n > 0) then
+            obj = new(A);
+        else
+            obj = new(B);
+        endif;
         n = obj.f0();
         return 1;
     end
