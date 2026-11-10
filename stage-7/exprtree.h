@@ -69,6 +69,7 @@ typedef struct ParamTypeInfo {
     Classtable *classType;
 } ParamTypeInfo;
 
+/* Stage 7 class field: fieldIndex is its word offset in the allocated object. */
 typedef struct Fieldlist {
     char *name;                 // field name
     int fieldIndex;             // position in the containing type
@@ -84,6 +85,7 @@ typedef struct Paramstruct {
     struct Paramstruct* next;
 } Paramstruct;
 
+/* Stage 7 method signature and label entry, stored in its owning class. */
 struct Memberfunclist {
     char *name;
     Typetable *type;            // method return type
@@ -94,6 +96,7 @@ struct Memberfunclist {
     Memberfunclist *next;
 };
 
+/* Stage 7 class layout and method table. parentptr stays NULL until Stage 8. */
 struct Classtable {
     char *name;
     Fieldlist *memberfield;
@@ -121,7 +124,7 @@ typedef struct VarList { // int a, b, c indel, oronninum oru node aayit linked l
 typedef struct Gsymbol {
     char *name;
     Typetable *type;
-    Classtable *classType;      // non-NULL for a global class variable
+    Classtable *classType;      // Stage 7: non-NULL for a global class variable
     int size; // default 1, we take the value of varlist and copy it here, gtable is the collection of all varlists
     int rows;
 	int cols;
@@ -135,7 +138,7 @@ typedef struct Gsymbol {
 typedef struct Lsymbol {
     char *name;
     Typetable *type;
-    Classtable *classType;       // non-NULL for class-typed locals, parameters, or self
+    Classtable *classType;       // Stage 7: class local/parameter or implicit self
     int binding;
     int size;
     int rows;

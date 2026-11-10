@@ -171,6 +171,14 @@ void TFinishDefinition(Typetable *type) {
     TcurrentDefinition = NULL;
 }
 
+/*
+ * FUNCTION: CLookup
+ * PURPOSE: Find a class declaration by name.
+ * INPUT: Class name.
+ * RETURN: Its class-table entry, or NULL when it is not declared.
+ * FLOW: Search the Stage 7 class list. Class declarations, class variables,
+ * method signatures, and member access use this lookup.
+ */
 Classtable *CLookup(char *name) {
     Classtable *entry;
     if (name == NULL) return NULL;
@@ -180,6 +188,14 @@ Classtable *CLookup(char *name) {
     return NULL;
 }
 
+/*
+ * FUNCTION: CInstall
+ * PURPOSE: Add a new class to the class table.
+ * INPUT: Class name and parent name; Stage 7 passes NULL for the parent.
+ * RETURN: New class entry, or NULL for duplicate names, inheritance, or failure.
+ * FLOW: Reject type/class name conflicts, create the entry, assign its class
+ * index, and append it to the class list.
+ */
 Classtable *CInstall(char *name, char *parentClassName) {
     Classtable *entry;
 
@@ -203,6 +219,14 @@ Classtable *CInstall(char *name, char *parentClassName) {
     return entry;
 }
 
+/*
+ * FUNCTION: Class_Flookup
+ * PURPOSE: Find one field in a class.
+ * INPUT: Class entry and field name.
+ * RETURN: Matching field entry, or NULL if that class has no such field.
+ * FLOW: Search the class's memberfield list. Member access uses this before
+ * checking whether the field is allowed in the current method.
+ */
 Fieldlist *Class_Flookup(Classtable *classEntry, char *name) {
     Fieldlist *field;
     if (classEntry == NULL || name == NULL) return NULL;
@@ -212,6 +236,14 @@ Fieldlist *Class_Flookup(Classtable *classEntry, char *name) {
     return NULL;
 }
 
+/*
+ * FUNCTION: Class_Finstall
+ * PURPOSE: Record one field in its class table.
+ * INPUT: Owning class, declared type name, and field name.
+ * RETURN: The new field entry, or NULL for invalid/duplicate fields or >8 fields.
+ * FLOW: Resolve the field's type as a type or earlier class, assign the next
+ * object-word index, and append it to the class's field list.
+ */
 Fieldlist *Class_Finstall(Classtable *classEntry, char *typeName, char *fieldName) {
     Fieldlist *field, *tail;
     Typetable *fieldType;
@@ -245,6 +277,13 @@ Fieldlist *Class_Finstall(Classtable *classEntry, char *typeName, char *fieldNam
     return field;
 }
 
+/*
+ * FUNCTION: Class_Mlookup
+ * PURPOSE: Find one method declared by a class.
+ * INPUT: Class entry and method name.
+ * RETURN: Matching method entry, or NULL if absent.
+ * FLOW: Search only this class's method list. Stage 7 has no parent-class search.
+ */
 Memberfunclist *Class_Mlookup(Classtable *classEntry, char *name) {
     Memberfunclist *method;
     if (classEntry == NULL || name == NULL) return NULL;
@@ -254,6 +293,14 @@ Memberfunclist *Class_Mlookup(Classtable *classEntry, char *name) {
     return NULL;
 }
 
+/*
+ * FUNCTION: Class_Minstall
+ * PURPOSE: Store one method signature in its class table.
+ * INPUT: Class, name, return type, and formal parameters.
+ * RETURN: Method entry, or NULL for a duplicate, invalid signature, or >8 methods.
+ * FLOW: Assign the declaration-order method index and a unique function label,
+ * then append the entry. Calls and generated method code use this label.
+ */
 Memberfunclist *Class_Minstall(Classtable *classEntry, char *name,
                                Typetable *returnType, Paramstruct *paramlist) {
     Memberfunclist *method, *tail;
@@ -282,6 +329,14 @@ Memberfunclist *Class_Minstall(Classtable *classEntry, char *name,
     return method;
 }
 
+/*
+ * FUNCTION: Class_MatchMethodDefinition
+ * PURPOSE: Match a method body header with its class declaration.
+ * INPUT: Class, method name, return type, and definition parameters.
+ * RETURN: Matching method entry, or NULL after reporting a mismatch.
+ * FLOW: Compare return type, parameter names/types/classes, and argument count;
+ * mark the method defined when every part matches. Called before its body parses.
+ */
 Memberfunclist *Class_MatchMethodDefinition(Classtable *classEntry, char *name,
                                             Typetable *returnType, Paramstruct *paramlist) {
     Memberfunclist *method = Class_Mlookup(classEntry, name);
@@ -331,6 +386,14 @@ Memberfunclist *Class_MatchMethodDefinition(Classtable *classEntry, char *name,
     return method;
 }
 
+/*
+ * FUNCTION: Class_CheckMethodDefinitions
+ * PURPOSE: Ensure every class method declaration has a body.
+ * INPUT: Class whose method definitions have just been parsed.
+ * RETURN: Nonzero if all methods are defined; zero if any are missing.
+ * FLOW: Check each method's isDefined flag, which is set by
+ * Class_MatchMethodDefinition().
+ */
 int Class_CheckMethodDefinitions(Classtable *classEntry) {
     Memberfunclist *method;
     int allDefined = 1;
@@ -346,6 +409,13 @@ int Class_CheckMethodDefinitions(Classtable *classEntry) {
     return allDefined;
 }
 
+/*
+ * FUNCTION: PrintClassTable
+ * PURPOSE: Display the Stage 7 class, field, and method tables.
+ * INPUT: None; uses the global class list.
+ * RETURN: Nothing. Prints names, indexes, signatures, and labels.
+ * FLOW: Print each class, then its fields and method entries for inspection.
+ */
 void PrintClassTable(void) {
     Classtable *classEntry;
 
@@ -518,6 +588,14 @@ void Install(char *name, Typetable *type, int size, int rows, int cols, int isAr
     }
 }
 
+/*
+ * FUNCTION: InstallClassVariable
+ * PURPOSE: Add a global class variable to the global symbol table.
+ * INPUT: Variable name and its class entry.
+ * RETURN: Nothing; reports an error and exits for invalid or duplicate names.
+ * FLOW: Keep the class identity in classType and reserve one global word for
+ * the heap address. new(Class) fills that word at run time.
+ */
 void InstallClassVariable(char *name, Classtable *classType) {
     Gsymbol *entry;
     Gsymbol *tail;
@@ -666,7 +744,14 @@ void BeginFunctionScope(Paramstruct *paramlist) {
     }
 }
 
-/* self is the implicit first argument, followed by the declared parameters. */
+/*
+ * FUNCTION: BeginMethodScope
+ * PURPOSE: Set up a method's local symbol table, including implicit self.
+ * INPUT: Declared parameters and the class owning this method.
+ * RETURN: Nothing. Sets activeMethodClass for the method's access checks.
+ * FLOW: Place self in its BP-relative slot, place explicit parameters in their
+ * slots, reset local bindings, and mark the current class for semantic checks.
+ */
 void BeginMethodScope(Paramstruct *paramlist, Classtable *classEntry) {
     int parameterBinding = -3;
     int parameterCount = 0;
@@ -698,6 +783,14 @@ void InstallLocalVariables(VarList *varlist, Typetable *type) {
     }
 }
 
+/*
+ * FUNCTION: InstallLocalClassVariables
+ * PURPOSE: Add class-typed local variables to the active local table.
+ * INPUT: Variable list and class-table entry.
+ * RETURN: Nothing; exits for invalid types, arrays, pointers, or functions.
+ * FLOW: Give each class local one BP-relative slot and retain its class entry.
+ * The slot stores the object's heap address; new(Class) allocates the object.
+ */
 void InstallLocalClassVariables(VarList *varlist, Classtable *classType) {
     if (classType == NULL) {
         fprintf(stderr, "Error: local variable has an undefined class type\n");
@@ -749,6 +842,14 @@ void SaveFunctionAST(char *name, tnode *body, int isMain) {
     functionASTTail = entry;
 }
 
+/*
+ * FUNCTION: SaveMethodAST
+ * PURPOSE: Keep a checked method AST and its local table for code generation.
+ * INPUT: Owning class, method-table entry, and completed method body.
+ * RETURN: Nothing. Appends an entry to MethodASTHead.
+ * FLOW: Save the class/method identity, tree, locals, and local count. The code
+ * generator later emits this tree at the method entry's label.
+ */
 void SaveMethodAST(Classtable *classEntry, Memberfunclist *methodEntry, tnode *body) {
     MethodAST *entry = calloc(1, sizeof(MethodAST));
     Lsymbol *local;
@@ -1098,6 +1199,14 @@ tnode* makeFreeNode(tnode *target) {
     return node;
 }
 
+/*
+ * FUNCTION: makeClassAllocNode
+ * PURPOSE: Build the AST node for target = new(ClassName).
+ * INPUT: Class-valued destination and requested class name.
+ * RETURN: Allocation node, or exits if the name/type does not match.
+ * FLOW: Find the requested class, compare it with the target's class, and tag
+ * the node so codeGen() allocates a fixed eight-word object block.
+ */
 tnode* makeClassAllocNode(tnode *target, char *className) {
     Classtable *requestedClass = CLookup(className);
     tnode *node;
@@ -1122,6 +1231,14 @@ tnode* makeClassAllocNode(tnode *target, char *className) {
     return node;
 }
 
+/*
+ * FUNCTION: makeClassDeleteNode
+ * PURPOSE: Build the AST node for delete(classVariable).
+ * INPUT: Class-valued variable or accessible class field.
+ * RETURN: Delete node, or exits if the target is not class-typed.
+ * FLOW: Attach the class identity; codeGen() reads the stored object address
+ * and returns its heap block to the free list.
+ */
 tnode* makeClassDeleteNode(tnode *target) {
     tnode *node;
 
@@ -1225,6 +1342,14 @@ tnode* appendArgNode(tnode *arglist, tnode *expr) {
     return arglist;
 }
 
+/*
+ * FUNCTION: ArgumentMatchesParameter
+ * PURPOSE: Check one argument against one declared parameter.
+ * INPUT: Formal parameter and actual argument AST node.
+ * RETURN: Nonzero if their types match, including exact class identity.
+ * FLOW: Class parameters compare class-table entries; other parameters compare
+ * type-table entries. NULL is accepted for a class parameter.
+ */
 static int ArgumentMatchesParameter(Paramstruct *parameter, tnode *argument) {
     if (parameter == NULL || argument == NULL) return 0;
 
@@ -1388,18 +1513,29 @@ tnode* makeArray2DNode(char *name, tnode *rowIndex, tnode *colIndex) {
 	return node;
 }
 
+/* Identify the implicit self symbol used by the current class method. */
 static int IsSelfNode(tnode *node) {
     return node != NULL && node->nodetype == NODE_ID &&
            node->varname != NULL && strcmp(node->varname, "self") == 0 &&
            node->Lentry != NULL && node->Lentry->classType != NULL;
 }
 
+/* Identify self.classField, the permitted receiver for another class's method. */
 static int IsDirectSelfField(tnode *node) {
     return node != NULL && node->nodetype == NODE_FIELD &&
            node->classOwner != NULL && node->Fentry != NULL &&
            IsSelfNode(node->left);
 }
 
+/*
+ * FUNCTION: makeMemberAccessNode
+ * PURPOSE: Resolve one class/type member after a dot.
+ * INPUT: Base expression and member name.
+ * RETURN: Field node with its field/method table entry attached.
+ * FLOW: Use the base's class or type entry to find the member, then attach its
+ * owner and type metadata. makeFieldValueNode() and makeMethodCallNode() apply
+ * the Stage 7 access rules to the resolved member.
+ */
 tnode* makeMemberAccessNode(tnode *base, char *memberName) {
     Fieldlist *field = NULL;
     Memberfunclist *method = NULL;
@@ -1449,6 +1585,14 @@ tnode* makeMemberAccessNode(tnode *base, char *memberName) {
     exit(1);
 }
 
+/*
+ * FUNCTION: makeFieldValueNode
+ * PURPOSE: Validate a member selection used as a field value.
+ * INPUT: Resolved member-access node.
+ * RETURN: The same field node, or exits if it is a method or inaccessible field.
+ * FLOW: Require a field entry; class fields are usable only as self.field
+ * inside a method of that class.
+ */
 tnode* makeFieldValueNode(tnode *memberAccess) {
     if (memberAccess == NULL || memberAccess->nodetype != NODE_FIELD ||
         memberAccess->Fentry == NULL) {
@@ -1465,6 +1609,14 @@ tnode* makeFieldValueNode(tnode *memberAccess) {
     return memberAccess;
 }
 
+/*
+ * FUNCTION: makeMethodCallNode
+ * PURPOSE: Validate and build a class method-call AST node.
+ * INPUT: Resolved method selection and actual argument expressions.
+ * RETURN: Method-call node containing receiver, method entry, and arguments.
+ * FLOW: Check the permitted receiver form, compare argument types/count with
+ * the method signature, and retain the receiver for codeGen() to pass as self.
+ */
 tnode* makeMethodCallNode(tnode *memberAccess, tnode *arglist) {
     Memberfunclist *method;
     tnode *receiver;

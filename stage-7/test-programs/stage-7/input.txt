@@ -1,0 +1,64 @@
+class
+Box {
+    decl
+        int value;
+        int setValue(int n);
+    enddecl
+
+    int setValue(int n)
+    {
+        decl
+        enddecl
+        begin
+            self.value = n;
+            return 0;
+        end
+    }
+}
+endclass
+
+decl
+    Box first, same, different;
+    int result;
+enddecl
+
+int main()
+{
+    decl
+    enddecl
+    begin
+        first = new(Box);
+        result = first.setValue(7);
+
+        same = first;
+
+        different = new(Box);
+        result = different.setValue(7);
+
+        if (first == same) then
+            write(1);
+        else
+            write(0);
+        endif;
+
+        if (first != different) then
+            write(2);
+        else
+            write(0);
+        endif;
+
+        if (first == different) then
+            write(0);
+        else
+            write(3);
+        endif;
+
+        if (first != same) then
+            write(0);
+        else
+            write(4);
+        endif;
+
+        return 0;
+    end
+}

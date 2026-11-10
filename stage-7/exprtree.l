@@ -55,6 +55,7 @@ void yyerror(const char* s);
 "str" { return STR; }
 "type" { return TYPE; }
 "endtype" { return ENDTYPE; }
+    /* Stage 7 adds these class, receiver, and object-lifetime keywords. */
 "class" { return CLASS; }
 "endclass" { return ENDCLASS; }
 "self" { return SELF; }

@@ -141,7 +141,8 @@ TypeDefBlock : TYPE TypeDefList ENDTYPE
              | /* empty */
              ;
 
-/* Stage 7 class syntax. Inheritance is intentionally excluded at this stage. */
+/* Stage 7 parses class declarations before globals so class names are available
+ * in global declarations. This grammar deliberately has no inheritance rule. */
 ClassDefBlock : CLASS ClassDefList ENDCLASS { PrintClassTable(); }
               | /* empty */
               ;
@@ -150,6 +151,8 @@ ClassDefList : ClassDefList ClassDef
              | ClassDef
              ;
 
+/* Install a class first, then its fields/signatures, then match each body to
+ * its signature. The class is cleared as the active class when parsing ends. */
 ClassDef : ID {
               currentClass = CInstall($1, NULL);
               if (currentClass == NULL) {
@@ -165,6 +168,7 @@ ClassDef : ID {
           }
          ;
 
+/* Fields precede methods in the class declaration and receive fixed offsets. */
 ClassFieldList : ClassFieldList ClassField
                | /* empty */
                ;
@@ -200,6 +204,7 @@ ClassField : INT ID SEMICOLON {
            }
            ;
 
+/* Save method signatures before parsing bodies so calls can find their labels. */
 ClassMethodDeclList : ClassMethodDeclList ClassMethodDecl
                     | ClassMethodDecl
                     ;
@@ -254,7 +259,8 @@ ClassMethodDecl : INT ID '(' ParamList ')' SEMICOLON {
 ClassMethodDefList : ClassMethodDefList ClassMethodDef
                    | ClassMethodDef
                    ;
-/* Method definitions are checked against their class declaration before parsing the body. */
+/* Match the definition to its saved signature, create the method scope (with
+ * implicit self), then build and save the method body AST. */
 ClassMethodDef : FType ID '(' ParamList ')' {
                     currentMethod = Class_MatchMethodDefinition(currentClass, $2, $1, $4);
                     if (currentMethod == NULL) exit(1);
@@ -538,7 +544,8 @@ Variable : ID {
         $$ = makeDereferenceNode($2);
     };
 
-/* Share the member prefix so fields and method calls resolve through one path. */
+/* Both class fields and calls start with this member path. Semantic helpers
+ * distinguish a field value from a method and enforce Stage 7 access rules. */
 Field : MemberAccess { $$ = makeFieldValueNode($1); };
 
 MemberAccess : SELF '.' ID {
@@ -792,6 +799,7 @@ Stmt : InputStmt {
     | Field ASSIGN ALLOC '(' ')' SEMICOLON {
         $$ = makeAllocNode($1);
     }
+    /* new(Class) allocates the object's block and stores its address. */
     | Variable ASSIGN NEW '(' ID ')' SEMICOLON {
         $$ = makeClassAllocNode($1, $5);
     }
@@ -804,6 +812,7 @@ Stmt : InputStmt {
     | FREE '(' Field ')' SEMICOLON {
         $$ = makeFreeNode($3);
     }
+    /* delete returns the object's block to the free list. */
     | DELETE '(' Variable ')' SEMICOLON {
         $$ = makeClassDeleteNode($3);
     }
@@ -931,6 +940,7 @@ E : E PLUS E {
         $$ = makeFunctionCallNode($1, $3);
     };
 
+/* Resolve method receiver and signature before code generation. */
 FieldFunction : MemberAccess '(' ArgList ')' {
                   $$ = makeMethodCallNode($1, $3);
               }

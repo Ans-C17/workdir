@@ -251,9 +251,15 @@ static int functionCall(tnode *t) {
     return resultReg;
 }
 
-/* Stage 7 has no inheritance, so a method call uses the statically resolved
- * label stored in the class table. The receiver is the implicit self argument
- * and must be pushed before the declared arguments. */
+/*
+ * FUNCTION: methodCall
+ * PURPOSE: Generate the caller side of a class method call.
+ * INPUT: Method-call AST node with receiver, method entry, and arguments.
+ * RETURN: Register containing the method's return value.
+ * FLOW: Save live registers, push the receiver as hidden self, push declared
+ * arguments, reserve a return slot, call the class-table label, then restore
+ * the result, stack, and saved registers. Stage 7 resolves the label directly.
+ */
 static int methodCall(tnode *t) {
     int savedTop = reg;
     int arguments = argCount(t->arglist);
@@ -378,6 +384,7 @@ int codeGen(tnode *t) {
     case NODE_FUNCTION:
         return functionCall(t);
 
+    /* Stage 7 method nodes use the receiver-aware caller sequence above. */
     case NODE_METHOD_CALL:
         return methodCall(t);
 
@@ -389,6 +396,8 @@ int codeGen(tnode *t) {
         freeReg();
         return -1;
 
+    /* Class allocations use an eight-word block; Stage 6 type allocations use
+     * their recorded type size. Both store the returned heap address. */
     case NODE_ALLOC:
         if (t->classType != NULL) {
             /* Stage 7 class objects use a fixed eight-word member block. */
@@ -534,7 +543,8 @@ void generateProgram(FunctionAST *functions) {
     fprintf(targetFile, "MOV R0, 0\n");
     fprintf(targetFile, "JMP MAIN\n");
 
-    /* Methods have their own AST list and labels assigned at declaration. */
+    /* Stage 7 methods use their own AST list and class-table labels. Emit them
+     * before ordinary functions and main so every saved method has code. */
     for (method = MethodASTHead; method != NULL; method = method->next) {
         reg = -1;
         loopTop = -1;

@@ -1,0 +1,186 @@
+STAGE 7: CLASSES AND OBJECTS
+============================
+
+WHAT THIS STAGE ADDS
+--------------------
+Stage 7 adds classes, their fields and methods, class variables, and the
+new(Class) and delete(object) statements. A class variable holds the address
+of an object stored in the heap. The object has space for eight words, so this
+implementation allows at most eight fields and eight methods in each class.
+Inheritance is not implemented in this stage.
+
+
+HOW A PROGRAM MOVES THROUGH THE COMPILER
+----------------------------------------
+1. exprtree.l recognizes class, endclass, self, new, and delete as keywords.
+
+2. exprtree.y parses type definitions, then class definitions, then global
+   declarations, ordinary functions, and main. Classes come before globals so
+   later declarations can refer to classes that have already been installed.
+
+3. For each class, ClassDef calls CInstall to create its class-table entry.
+   ClassField rules call Class_Finstall to record each field's name, type, and
+   word position. ClassMethodDecl rules call Class_Minstall to record each
+   method's return type, parameters, position, and generated label.
+
+4. When a method body is reached, Class_MatchMethodDefinition checks its
+   signature against the earlier declaration. BeginMethodScope creates the
+   method's local table, including the implicit self entry and explicit
+   parameters. Local declarations are added as the body is parsed. The parser
+   builds the AST, checks the return type, and SaveMethodAST keeps the tree for
+   code generation. At the end of a class, Class_CheckMethodDefinitions checks
+   that all declared methods have definitions.
+
+5. Global class variables are installed with InstallClassVariable. A local
+   class variable is installed with InstallLocalClassVariables. Their symbol
+   table entries point to a Classtable entry, which identifies the class.
+
+6. Dotted expressions pass through makeMemberAccessNode. makeFieldValueNode
+   checks that the selected member is a field value and applies the class-field
+   visibility rule. Class fields can be read or written as self.field inside a
+   method of that class. makeMethodCallNode checks method access and compares
+   actual argument types and count with the declared parameters.
+
+7. codeGen walks each saved AST. lvalueAddress finds the object's stored
+   address, loads the object pointer, then adds the selected field's index.
+   methodCall prepares a call, including the receiver address as hidden self.
+   generateProgram writes the heap setup, method code, ordinary function code,
+   and main code into target.xsm.
+
+
+HOW self AND METHOD CALLS WORK
+------------------------------
+All objects of a class share the same generated method code. The method code
+therefore needs the address of the particular object being used by this call.
+The caller supplies it as an extra, hidden argument named self.
+
+methodCall evaluates the receiver (for example, obj in obj.setValue(12)) and
+pushes its address before the explicit argument values. BeginMethodScope lays
+out the matching BP-relative slots and installs a local symbol named self.
+Inside the method, self.value resolves to the field offset in the class table.
+The method's generated label comes from its method-table entry.
+
+The code's access checks are in exprtree.c, mainly
+makeMemberAccessNode(), makeFieldValueNode(), and makeMethodCallNode(). A method
+can be called as self.method() inside its class, or as self.classField.method()
+through a direct class-valued field. Outside a method, a class variable can be
+the receiver, as in obj.method(). Direct access like obj.value is rejected;
+class fields are private to methods of their class in this implementation.
+Look at those three functions if a modification changes which receiver or
+member can be used. Keep the
+hidden-self layout in BeginMethodScope() consistent with methodCall() if the
+calling convention changes.
+
+
+OBJECT CREATION AND DELETION
+---------------------------
+For target = new(ClassName), the parser calls makeClassAllocNode(). It checks
+that the class exists and matches the target variable's class. The AST records
+the class entry. codeGen handles NODE_ALLOC by requesting an eight-word block
+from the heap and storing the returned address in target.
+
+For delete(target), makeClassDeleteNode() checks that the target is a class
+variable. codeGen handles NODE_FREE by returning its address to the free list.
+The free operation does not reset the source variable, so do not treat a
+deleted variable as a fresh object until it is assigned a new object address.
+
+
+USEFUL FUNCTION MAP
+-------------------
+exprtree.y
+  Program              Sets the order of the program sections.
+  ClassDef             Installs a class, parses its contents, checks methods.
+  ClassField           Adds a field declaration to the current class.
+  ClassMethodDecl      Adds a method signature to the current class.
+  ClassMethodDef       Matches a method body to its signature and builds its AST.
+  MemberAccess / Field Resolves dotted field and method receiver syntax.
+  FieldFunction        Builds a method call from the receiver and arguments.
+  NEW / DELETE rules   Build AST nodes for creating and releasing objects.
+
+exprtree.c
+  CInstall / CLookup                Create and find class-table entries.
+  Class_Finstall / Class_Flookup    Add and find class fields.
+  Class_Minstall / Class_Mlookup    Add and find methods.
+  Class_MatchMethodDefinition       Check definition against declaration.
+  Class_CheckMethodDefinitions      Ensure all declared methods have bodies.
+  InstallClassVariable              Add a global class variable.
+  BeginMethodScope                  Add self and parameters to the local table.
+  SaveMethodAST                     Save a method tree for code generation.
+  makeMemberAccessNode              Resolve one part of a dotted expression.
+  makeFieldValueNode                Ensure a selected member is a field value.
+  makeMethodCallNode                Check a method call and build its AST node.
+  makeClassAllocNode / DeleteNode   Validate object creation and deletion.
+
+codegen.c
+  idAddress       Find a variable slot, including the hidden self slot.
+  lvalueAddress   Find a field's actual address inside the heap object.
+  methodCall      Push receiver and arguments, call method, recover result.
+  codeGen         Translate AST nodes, including fields and object operations.
+  generateProgram Write the complete target program and emit saved methods.
+
+exprtree.h
+  Classtable      Stores one class and its fields/methods.
+  Fieldlist       Stores a field name, type, and object-word index.
+  Memberfunclist  Stores a method signature, method position, and code label.
+  Gsymbol/Lsymbol Record class identity for global/local class variables.
+  MethodAST       Holds a method's AST and local symbol table until codegen.
+
+
+SMALL EXAMPLE
+-------------
+class
+A {
+    decl
+        int value;
+        int setValue(int n);
+        int getValue();
+    enddecl
+
+    int setValue(int n) {
+        decl enddecl
+        begin
+            self.value = n;
+            return 0;
+        end
+    }
+
+    int getValue() {
+        decl enddecl
+        begin
+            return self.value;
+        end
+    }
+}
+endclass
+
+decl
+    int result;
+enddecl
+
+int main() {
+    decl
+        A obj;
+    enddecl
+    begin
+        obj = new(A);
+        obj.setValue(12);
+        result = obj.getValue();
+        write(result);
+        return 0;
+    end
+}
+
+The method call passes obj's address as self. setValue stores 12 in the object's
+value field, and getValue reads that field. The output is 12.
+
+
+WHERE TO START FOR COMMON CHANGES
+---------------------------------
+To change class or method syntax, start at the relevant rules in exprtree.y and
+the keyword rules in exprtree.l. To change class limits or stored class data,
+inspect CInstall, Class_Finstall, Class_Minstall, and the structures in
+exprtree.h. To change member visibility or method-call checks, inspect
+makeMemberAccessNode(), makeFieldValueNode(), and makeMethodCallNode(). To
+change field offsets or object allocation, inspect lvalueAddress(), codeGen(),
+and the allocator code in codegen.c. To change how self or method arguments are
+passed, update BeginMethodScope() and methodCall() together.
