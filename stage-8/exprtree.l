@@ -57,6 +57,7 @@ void yyerror(const char* s);
 "endtype" { return ENDTYPE; }
 "class" { return CLASS; }
 "endclass" { return ENDCLASS; }
+    /* Stage 8 adds the parent-class keyword used by the extends clause. */
 "extends" { return EXTENDS; }
 "self" { return SELF; }
 "NULL" { return T_NULL; }

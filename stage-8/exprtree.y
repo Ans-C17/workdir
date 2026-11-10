@@ -54,6 +54,7 @@ static void InstallGlobalVarList(VarList *variables, Typetable *type,
     }
 }
 
+/* Stage 8 keeps inherited and local fields before method declarations. */
 static void CheckClassFieldOrder(void) {
     if (currentClass != NULL && currentClassHasOwnMethodDecl) {
         fprintf(stderr, "Error: class fields must be declared before methods in class '%s'\n",
@@ -62,6 +63,7 @@ static void CheckClassFieldOrder(void) {
     }
 }
 
+/* Reject redeclaring a parent field before adding this class's own field. */
 static void InstallDeclaredClassField(char *typeName, char *fieldName) {
     if (currentClass != NULL && currentClass->parentptr != NULL &&
         Class_Flookup(currentClass->parentptr, fieldName) != NULL) {
@@ -166,7 +168,7 @@ TypeDefBlock : TYPE TypeDefList ENDTYPE
              | /* empty */
              ;
 
-/* Class syntax, including inheritance from an earlier class definition. */
+/* Stage 8 class definitions may extend only a class that was defined earlier. */
 ClassDefBlock : CLASS ClassDefList ENDCLASS { PrintClassTable(); }
               | /* empty */
               ;
@@ -175,6 +177,8 @@ ClassDefList : ClassDefList ClassDef
              | ClassDef
              ;
 
+/* Create the child table (including inherited entries) before parsing its
+ * fields, method declarations, and definitions. */
 ClassDef : ID ClassParentOpt {
               currentClass = CInstall($1, $2);
               if (currentClass == NULL) {
@@ -191,8 +195,8 @@ ClassDef : ID ClassParentOpt {
           }
          ;
 
-/* One shared list avoids adjacent nullable field/method lists. The field
-   actions below enforce the required fields-before-methods order. */
+/* One ordered member list supports fields before methods. After the first
+ * method declaration, CheckClassFieldOrder rejects any later field. */
 ClassMemberDecls : ClassMemberDecls ClassField
                  | ClassMemberDecls ClassMethodDecl { currentClassHasOwnMethodDecl = 1; }
                  | /* empty */
@@ -220,9 +224,8 @@ ClassField : INT ID SEMICOLON {
            }
            ;
 
-/* Repeated method names are allowed when their parameter type signatures
-   differ; Class_Minstall rejects duplicate signatures and preserves inherited
-   virtual slots for exact-signature overrides. */
+/* Repeated method names are overloads when parameter types differ. An exact
+ * inherited signature is an override and keeps its parent's virtual slot. */
 ClassMethodDecl : INT ID '(' ParamList ')' SEMICOLON {
                     if (Class_Minstall(currentClass, $2, TLookup("int"), $4) == NULL) {
                         fprintf(stderr, "Error: method '%s' has a duplicate signature, incompatible override, invalid declaration, or exceeds the 8-method limit in class '%s'\n",
@@ -273,7 +276,8 @@ ClassMethodDecl : INT ID '(' ParamList ')' SEMICOLON {
 ClassMethodDefList : ClassMethodDef ClassMethodDefList
                    | /* empty */
                    ;
-/* Method definitions are checked against their class declaration before parsing the body. */
+/* Match an overloaded definition by its parameter types, then verify its full
+ * signature before building the body in the current class scope. */
 ClassMethodDef : FType ID '(' ParamList ')' {
                     currentMethod = Class_MatchMethodDefinition(currentClass, $2, $1, $4);
                     if (currentMethod == NULL) exit(1);
@@ -366,6 +370,7 @@ TypeName : INT { $$ = TLookup("int"); }
          }
          ;
 
+/* This optional parent name is passed to CInstall; absent means a base class. */
 ClassParentOpt : EXTENDS ID { $$ = $2; }
                | /* empty */ { $$ = NULL; }
                ;

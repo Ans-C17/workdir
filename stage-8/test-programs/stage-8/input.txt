@@ -1,0 +1,39 @@
+class
+Base {
+    decl
+        int choose(int value);
+        int choose(int value, int multiplier);
+    enddecl
+
+    int choose(int value) {
+        decl
+        enddecl
+        begin
+            return value + 10;
+        end
+    }
+
+    int choose(int value, int multiplier) {
+        decl
+        enddecl
+        begin
+            return value * multiplier;
+        end
+    }
+}
+endclass
+
+decl
+    Base item;
+enddecl
+
+int main() {
+    decl
+    enddecl
+    begin
+        item = new(Base);
+        write(item.choose(5));
+        write(item.choose(5, 4));
+        return 0;
+    end
+}

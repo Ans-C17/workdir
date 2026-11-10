@@ -1,48 +1,39 @@
-class Parent {
+class
+Base {
     decl
-        int info(int n);
+        int choose(int value);
+        int choose(int value, int multiplier);
     enddecl
 
-    int info(int n) {
+    int choose(int value) {
         decl
         enddecl
-
         begin
-            write(n);
-            return 0;
+            return value + 10;
         end
     }
-}
 
-Child extends Parent {
-    decl
-        int info(str s);
-    enddecl
-
-    int info(str s) {
+    int choose(int value, int multiplier) {
         decl
         enddecl
-
         begin
-            write(s);
-            return 0;
+            return value * multiplier;
         end
     }
 }
 endclass
 
 decl
-    Child c;
-    int result;
+    Base item;
 enddecl
 
 int main() {
     decl
     enddecl
     begin
-        c = new(Child);
-        result = c.info(123);
-        result = c.info("inherited overload still works");
+        item = new(Base);
+        write(item.choose(5));
+        write(item.choose(5, 4));
         return 0;
     end
 }

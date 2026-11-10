@@ -1,0 +1,59 @@
+class Base {
+    decl
+        int speak(int n);
+    enddecl
+
+    int speak(int n) {
+        decl
+        enddecl
+        begin
+            write("Base int");
+            return 0;
+        end
+    }
+}
+
+Child extends Base {
+    decl
+        int speak(int n);
+        int speak(str s);
+    enddecl
+
+    int speak(int n) {
+        decl
+        enddecl
+        begin
+            write("Child int");
+            return 0;
+        end
+    }
+
+    int speak(str s) {
+        decl
+        enddecl
+        begin
+            write(s);
+            return 0;
+        end
+    }
+}
+endclass
+
+decl
+    Base b;
+    Child c;
+    int result;
+enddecl
+
+int main() {
+    decl
+    enddecl
+    begin
+        b = new(Child);
+        c = new(Child);
+        result = b.speak(4);
+        result = c.speak(4);
+        result = c.speak("Child string");
+        return 0;
+    end
+}

@@ -136,7 +136,14 @@ static int isClassValueLocation(tnode *t) {
             t->Fentry != NULL);
 }
 
-/* Class values store [member pointer, vtable pointer]. */
+/*
+ * FUNCTION: classVTableAddress
+ * PURPOSE: Find the vtable-pointer word belonging to a class value.
+ * INPUT: Class variable or class-valued field AST node.
+ * RETURN: Register holding the address of the vtable slot.
+ * FLOW: For a field, find its first word and move one word forward. For a
+ * global/local, use the adjacent second word in the two-word class slot.
+ */
 static int classVTableAddress(tnode *t) {
     int addressReg;
 
@@ -165,6 +172,13 @@ static int classVTableAddress(tnode *t) {
     return addressReg;
 }
 
+/*
+ * FUNCTION: classVTableValue
+ * PURPOSE: Load the vtable pointer belonging to a class value.
+ * INPUT: Class-valued expression or NULL node.
+ * RETURN: Register containing its table address (zero for NULL).
+ * FLOW: Find the second word with classVTableAddress(), then load the pointer.
+ */
 static int classVTableValue(tnode *t) {
     int addressReg;
 
@@ -322,7 +336,17 @@ static int functionCall(tnode *t) {
     return resultReg;
 }
 
-/* Resolve the method through the receiver's runtime virtual function table. */
+/*
+ * FUNCTION: methodCall
+ * PURPOSE: Generate a dynamically dispatched call to a class method.
+ * INPUT: NODE_METHOD_CALL with receiver, selected overload/slot, and arguments.
+ * RETURN: Register containing the method's return value.
+ * FLOW: Save live registers, push the receiver's vtable and object address as
+ * hidden arguments, load the function address from the runtime vtable slot,
+ * push explicit arguments, call it, then recover the result and stack.
+ * IMPORTANT: The method slot selected by semantic analysis must stay stable
+ * across parent copies and child overrides.
+ */
 static int methodCall(tnode *t) {
     int savedTop = reg;
     int arguments;
@@ -457,12 +481,15 @@ int codeGen(tnode *t) {
         return functionCall(t);
 
     case NODE_METHOD_CALL:
+        /* Stage 8 dispatch uses the receiver's actual object's vtable. */
         return methodCall(t);
 
     case NODE_ASSIGN:
         if (isClassValueLocation(t->left) &&
             (isClassValueLocation(t->right) ||
              (t->right != NULL && t->right->nodetype == NODE_NULL))) {
+            /* Copy both words of a class reference together. Copying only the
+             * object pointer would leave method calls using the wrong vtable. */
             int tableReg = classVTableValue(t->right);
             resultReg = codeGen(t->right);
             addressReg = lvalueAddress(t->left);
@@ -499,6 +526,8 @@ int codeGen(tnode *t) {
         addressReg = lvalueAddress(t->left);
         fprintf(targetFile, "MOV [R%d], R%d\n", addressReg, resultReg);
         if (t->classType != NULL && isClassValueLocation(t->left)) {
+            /* A new object gets the static vtable for its declared class; a
+             * later assignment from a child object copies that child's table. */
             int tableReg = getReg();
             fprintf(targetFile, "MOV R%d, %d\n", tableReg,
                     4096 + t->classType->classIndex * 8);
@@ -629,6 +658,14 @@ static void prologue(int localCount) {
     }
 }
 
+/*
+ * FUNCTION: initializeVirtualFunctionTables
+ * PURPOSE: Fill the static vtable area for every class before program execution.
+ * INPUT: None; reads each class's inherited/overridden method list.
+ * RETURN: Nothing. Writes startup instructions to targetFile.
+ * FLOW: Clear each class's eight slots, then store each method label at its
+ * stable funcposition. An override has the child's label in the inherited slot.
+ */
 static void initializeVirtualFunctionTables(void) {
     Classtable *classEntry;
 
@@ -658,6 +695,7 @@ void generateProgram(FunctionAST *functions) {
     fprintf(targetFile, "MOV SP, %d\n", nextBinding - 1);
     emitHeapInit();
     fprintf(targetFile, "MOV R0, 0\n");
+    /* Stage 8 must initialize dispatch tables before any object can be called. */
     initializeVirtualFunctionTables();
     fprintf(targetFile, "JMP MAIN\n");
 

@@ -1,0 +1,46 @@
+class Base {
+    decl
+        int show(int n);
+    enddecl
+
+    int show(int n) {
+        decl
+        enddecl
+        begin
+            write(n);
+            return 0;
+        end
+    }
+}
+
+Child extends Base {
+    decl
+        int show(str s);
+    enddecl
+
+    int show(str s) {
+        decl
+        enddecl
+        begin
+            write(s);
+            return 0;
+        end
+    }
+}
+endclass
+
+decl
+    Child c;
+    int result;
+enddecl
+
+int main() {
+    decl
+    enddecl
+    begin
+        c = new(Child);
+        result = c.show(7);
+        result = c.show("hello");
+        return 0;
+    end
+}

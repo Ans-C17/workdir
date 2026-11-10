@@ -86,7 +86,7 @@ typedef struct Paramstruct {
 
 struct Memberfunclist {
     char *name;
-    Classtable *ownerClass;     // class that declares or overrides this method
+    Classtable *ownerClass;     // Stage 8: identifies inherited entries replaced by overrides
     Typetable *type;            // method return type
     Paramstruct *paramlist;
     int funcposition;
@@ -98,11 +98,11 @@ struct Memberfunclist {
 struct Classtable {
     char *name;
     Fieldlist *memberfield;
-    Memberfunclist *vfuncptr;
-    Classtable *parentptr;      // NULL in stage 7; inheritance comes in stage 8
-    int classIndex;
+    Memberfunclist *vfuncptr;   // inherited entries keep their slot; overrides replace entries
+    Classtable *parentptr;      // Stage 8 parent link; NULL for a class with no parent
+    int classIndex;             // selects this class's static vtable block
     int fieldCount;
-    int fieldWords;             // object words used by fields (class references use two)
+    int fieldWords;             // inherited + local field words; class references use two
     int methodCount;
     Classtable *next;
 };
@@ -139,7 +139,7 @@ typedef struct Lsymbol {
     Typetable *type;
     Classtable *classType;       // non-NULL for class-typed locals, parameters, or self
     int binding;
-    int vtableBinding;            // BP-relative slot for the second word of a class value
+    int vtableBinding;            // Stage 8 slot for this value's virtual-table pointer
     int size;
     int rows;
     int cols;

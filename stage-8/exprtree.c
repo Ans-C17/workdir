@@ -184,6 +184,14 @@ Classtable *CGetHead(void) {
     return Chead;
 }
 
+/*
+ * FUNCTION: IsSameOrDerivedClass
+ * PURPOSE: Check whether a class value can be used where another class is expected.
+ * INPUT: Actual class and required class.
+ * RETURN: Nonzero when actual is the required class or one of its children.
+ * FLOW: Walk actual's parent chain until the required class is found or the
+ * chain ends. Class assignment and new(Class) target checks use this rule.
+ */
 static int IsSameOrDerivedClass(Classtable *candidate, Classtable *expected) {
     while (candidate != NULL) {
         if (candidate == expected) return 1;
@@ -192,6 +200,14 @@ static int IsSameOrDerivedClass(Classtable *candidate, Classtable *expected) {
     return 0;
 }
 
+/*
+ * FUNCTION: CloneClassParams
+ * PURPOSE: Copy a method's parameter list when copying inherited methods.
+ * INPUT: Source parameter list.
+ * RETURN: Independent copied list, or NULL if allocation fails.
+ * FLOW: Copy names and type/class pointers in order. The child class owns these
+ * copies so an override can replace its parameter list without altering parent.
+ */
 static Paramstruct *CloneClassParams(Paramstruct *source) {
     Paramstruct *head = NULL;
     Paramstruct *tail = NULL;
@@ -223,6 +239,7 @@ fail:
     return NULL;
 }
 
+/* Free the parameter-list copy owned by one class method entry. */
 static void FreeClassParams(Paramstruct *param) {
     while (param != NULL) {
         Paramstruct *next = param->next;
@@ -232,6 +249,7 @@ static void FreeClassParams(Paramstruct *param) {
     }
 }
 
+/* Compare parameter type identities only; parameter names do not define overloads. */
 static int SameMethodParameters(Paramstruct *params, Memberfunclist *method) {
     Paramstruct *expected;
 
@@ -246,6 +264,7 @@ static int SameMethodParameters(Paramstruct *params, Memberfunclist *method) {
     return expected == NULL && params == NULL;
 }
 
+/* Release copied fields, methods, and parameters if child-class setup fails. */
 static void FreeClassMembers(Classtable *classEntry) {
     Fieldlist *field = classEntry->memberfield;
     Memberfunclist *method = classEntry->vfuncptr;
@@ -265,6 +284,15 @@ static void FreeClassMembers(Classtable *classEntry) {
     }
 }
 
+/*
+ * FUNCTION: CopyInheritedMembers
+ * PURPOSE: Give a child its own copies of its parent's fields and method table.
+ * INPUT: Child entry being built and its already-defined parent entry.
+ * RETURN: Nonzero if every inherited entry was copied; zero on allocation failure.
+ * FLOW: Copy fields with the same word offsets, then copy methods with the same
+ * virtual slots and labels. Class_Minstall() later replaces a slot for overrides.
+ * IMPORTANT: These entries are copies, so child changes do not alter the parent.
+ */
 static int CopyInheritedMembers(Classtable *child, Classtable *parent) {
     Fieldlist *sourceField;
     Fieldlist **fieldTail = &child->memberfield;
@@ -316,6 +344,14 @@ static int CopyInheritedMembers(Classtable *child, Classtable *parent) {
     return 1;
 }
 
+/*
+ * FUNCTION: CInstall
+ * PURPOSE: Create a class entry, optionally inheriting from an earlier class.
+ * INPUT: Class name and optional parent class name.
+ * RETURN: New entry, or NULL for duplicate/unknown names or setup failure.
+ * FLOW: Find the parent, copy its members, reserve this class's eight vtable
+ * words, assign a class index, and append the new entry to the class list.
+ */
 Classtable *CInstall(char *name, char *parentClassName) {
     Classtable *entry;
     Classtable *parent = NULL;
@@ -356,6 +392,7 @@ Classtable *CInstall(char *name, char *parentClassName) {
     return entry;
 }
 
+/* Search this class's copied field list; inherited fields keep their offsets. */
 Fieldlist *Class_Flookup(Classtable *classEntry, char *name) {
     Fieldlist *field;
     if (classEntry == NULL || name == NULL) return NULL;
@@ -365,6 +402,15 @@ Fieldlist *Class_Flookup(Classtable *classEntry, char *name) {
     return NULL;
 }
 
+/*
+ * FUNCTION: Class_Finstall
+ * PURPOSE: Add a field to a class while preserving inherited object layout.
+ * INPUT: Class, field type name, and field name.
+ * RETURN: New field entry, or NULL for duplicates, inherited-name reuse, or
+ * field/word limit overflow.
+ * FLOW: Resolve whether the field is a regular type or class reference. Place
+ * it after existing inherited/local words; class references reserve two words.
+ */
 Fieldlist *Class_Finstall(Classtable *classEntry, char *typeName, char *fieldName) {
     Fieldlist *field, *tail;
     Typetable *fieldType;
@@ -405,6 +451,7 @@ Fieldlist *Class_Finstall(Classtable *classEntry, char *typeName, char *fieldNam
     return field;
 }
 
+/* Search local and copied inherited method entries in the class's virtual table. */
 Memberfunclist *Class_Mlookup(Classtable *classEntry, char *name) {
     Memberfunclist *method;
     if (classEntry == NULL || name == NULL) return NULL;
@@ -414,6 +461,15 @@ Memberfunclist *Class_Mlookup(Classtable *classEntry, char *name) {
     return NULL;
 }
 
+/*
+ * FUNCTION: Class_Minstall
+ * PURPOSE: Add a method overload or install an override in the class table.
+ * INPUT: Class, method name, return type, and formal parameter list.
+ * RETURN: Method entry, or NULL for duplicate/incompatible signatures or failure.
+ * FLOW: Match name and parameter types against inherited/local entries. An exact
+ * inherited match keeps its virtual position but receives the child's label;
+ * otherwise append a new method at the next slot.
+ */
 Memberfunclist *Class_Minstall(Classtable *classEntry, char *name,
                                Typetable *returnType, Paramstruct *paramlist) {
     Memberfunclist *method, *tail, *inheritedMatch = NULL;
@@ -464,6 +520,14 @@ Memberfunclist *Class_Minstall(Classtable *classEntry, char *name,
     return method;
 }
 
+/*
+ * FUNCTION: Class_MatchMethodDefinition
+ * PURPOSE: Match an overloaded method body to the correct declared signature.
+ * INPUT: Class, name, return type, and definition parameters.
+ * RETURN: Matching method entry, or NULL when no declaration matches.
+ * FLOW: Find by method name plus parameter types, then check return type,
+ * parameter names/count, and duplicate definitions before marking it defined.
+ */
 Memberfunclist *Class_MatchMethodDefinition(Classtable *classEntry, char *name,
                                             Typetable *returnType, Paramstruct *paramlist) {
     Memberfunclist *method = NULL;
@@ -522,6 +586,7 @@ Memberfunclist *Class_MatchMethodDefinition(Classtable *classEntry, char *name,
     return method;
 }
 
+/* Inherited methods already have bodies; overrides must be defined in the child. */
 int Class_CheckMethodDefinitions(Classtable *classEntry) {
     Memberfunclist *method;
     int allDefined = 1;
@@ -1438,6 +1503,14 @@ static int ArgumentMatchesParameter(Paramstruct *parameter, tnode *argument) {
            parameter->type == argument->typeEntry;
 }
 
+/*
+ * FUNCTION: MethodArgumentsMatch
+ * PURPOSE: Find which overload matches a call's actual arguments.
+ * INPUT: Candidate method entry and linked AST argument list.
+ * RETURN: Nonzero if every argument has the expected type/class and count.
+ * FLOW: Compare each actual with its formal; class parameters require the
+ * same class entry; NULL is accepted for a class parameter.
+ */
 static int MethodArgumentsMatch(Memberfunclist *method, tnode *arglist) {
     Paramstruct *formal = method->paramlist;
     tnode *actual = arglist;
@@ -1677,6 +1750,14 @@ tnode* makeFieldValueNode(tnode *memberAccess) {
     return memberAccess;
 }
 
+/*
+ * FUNCTION: makeMethodCallNode
+ * PURPOSE: Check a method call and attach the selected overload to its AST node.
+ * INPUT: Resolved member access and actual arguments.
+ * RETURN: Method-call node, or exits if no overload or receiver is permitted.
+ * FLOW: Select the overload using the receiver's static class, validate the
+ * receiver rule, and retain its virtual slot for runtime dispatch in codegen.
+ */
 tnode* makeMethodCallNode(tnode *memberAccess, tnode *arglist) {
     Memberfunclist *method;
     tnode *receiver;
