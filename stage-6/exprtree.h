@@ -53,6 +53,7 @@ enum {
     TYPE_NULL
 };
 
+/* One row per built-in or user-defined type; field links describe named types. */
 typedef struct Typetable {
     char *name;                 // type name
     int size;                   // number of words in a value of this type
@@ -60,6 +61,7 @@ typedef struct Typetable {
     struct Typetable *next;
 } Typetable;
 
+/* One declared field, pointing to its type-table row and position in its owner. */
 typedef struct Fieldlist {
     char *name;                 // field name
     int fieldIndex;             // position in the containing type
@@ -110,6 +112,7 @@ typedef struct Lsymbol {
     struct Lsymbol *next;
 } Lsymbol;
 
+/* typeEntry preserves exact named-type identity for field and assignment checks. */
 typedef struct tnode {
 	int type; // legacy primitive type code used by existing AST/codegen logic
     Typetable *typeEntry; // exact type identity, including user-defined types
@@ -134,6 +137,7 @@ typedef struct FunctionAST {
 extern FunctionAST *FunctionASTHead;
 extern int nextBinding;
 
+/* Type table and heap-related AST helpers added for Stage 6. */
 void TypeTableCreate(void);
 Typetable *TLookup(char *name);
 Typetable *TInstall(char *name, int size, Fieldlist *fields);

@@ -12,6 +12,7 @@ static Typetable *Thead = NULL;
 static Typetable *Ttail = NULL;
 static Typetable *TcurrentDefinition = NULL;
 
+/* Create one type-table row and add it to the end of the type list. */
 static Typetable *CreateTypeEntry(const char *name, int size) {
     Typetable *entry = calloc(1, sizeof(Typetable));
     if (entry == NULL) return NULL;
@@ -29,6 +30,7 @@ static Typetable *CreateTypeEntry(const char *name, int size) {
     return entry;
 }
 
+/* Add the built-in types (int, str, bool, void, null, and primitive pointers). */
 void TypeTableCreate(void) {
     /* Safe to call more than once; preserve user entries if already initialized. */
     if (Thead != NULL) return;
@@ -45,6 +47,7 @@ void TypeTableCreate(void) {
     }
 }
 
+/* Return the built-in pointer type for int/str; other pointer types are unsupported here. */
 Typetable *PointerType(Typetable *type) {
     if (type == NULL) return NULL;
     if (strcmp(type->name, "int") == 0) return TLookup("int_ptr");
@@ -52,6 +55,7 @@ Typetable *PointerType(Typetable *type) {
     return NULL;
 }
 
+/* Convert a built-in type-table entry to the older integer code used by AST operators. */
 int TypeCode(Typetable *type) {
     if (type == NULL) return -1;
     if (strcmp(type->name, "int") == 0) return TYPE_INT;
@@ -62,6 +66,7 @@ int TypeCode(Typetable *type) {
     return -1; /* AST user-type identity is handled in a later step. */
 }
 
+/* Find the type-table row matching a built-in AST type code. */
 static Typetable *TypeEntryForCode(int type) {
     switch (type) {
         case TYPE_INT: return TLookup("int");
@@ -73,6 +78,7 @@ static Typetable *TypeEntryForCode(int type) {
     }
 }
 
+/* Find a type-table row by its name. */
 Typetable *TLookup(char *name) {
     Typetable *entry;
     if (name == NULL) return NULL;
@@ -83,12 +89,18 @@ Typetable *TLookup(char *name) {
     return NULL;
 }
 
+/*
+ * Add a type-table row and, when fields are supplied, check and attach them.
+ * Returns the new type or NULL if its name/fields are invalid. TBeginDefinition
+ * uses this to add an empty row before the grammar installs recursive fields.
+ */
 Typetable *TInstall(char *name, int size, Fieldlist *fields) {
     Typetable *entry;
     Fieldlist *field;
     int index = 0;
     if (name == NULL || TLookup(name) != NULL) return NULL;
 
+    /* Each user-defined field is one word; assign positions in declaration order. */
     for (field = fields; field != NULL; field = field->next) {
         Fieldlist *previous;
         Typetable *knownType;
@@ -108,21 +120,24 @@ Typetable *TInstall(char *name, int size, Fieldlist *fields) {
     return entry;
 }
 
+/* Add an incomplete type first so its own fields can refer to it recursively. */
 Typetable *TBeginDefinition(char *name) {
     Typetable *entry;
     if (name == NULL || TLookup(name) != NULL || TcurrentDefinition != NULL) return NULL;
 
-    /* Install the incomplete entry first so fields may refer to this type recursively. */
+    /* Install the name first, allowing a field to refer back to this same type. */
     entry = TInstall(name, 0, NULL);
     if (entry == NULL) return NULL;
     TcurrentDefinition = entry;
     return entry;
 }
 
+/* Return the type currently being filled by the type-definition grammar. */
 Typetable *TCurrentDefinition(void) {
     return TcurrentDefinition;
 }
 
+/* Add one field to the type currently being defined, with its type and position. */
 Fieldlist *FInstall(Typetable *owner, char *name, Typetable *fieldType, int fieldIndex) {
     Fieldlist *field;
     Fieldlist *tail;
@@ -153,6 +168,7 @@ Fieldlist *FInstall(Typetable *owner, char *name, Typetable *fieldType, int fiel
     return field;
 }
 
+/* Count the completed type's fields and clear the current-definition marker. */
 void TFinishDefinition(Typetable *type) {
     Fieldlist *field;
     int size = 0;
@@ -165,6 +181,7 @@ void TFinishDefinition(Typetable *type) {
     TcurrentDefinition = NULL;
 }
 
+/* Find a named field inside a type. */
 Fieldlist *FLookup(Typetable *type, char *name) {
     Fieldlist *field;
     if (type == NULL || name == NULL) return NULL;
@@ -175,10 +192,12 @@ Fieldlist *FLookup(Typetable *type, char *name) {
     return NULL;
 }
 
+/* Return the number of fields/words needed by a user-defined type. */
 int GetSize(Typetable *type) {
     return type == NULL ? 0 : type->size;
 }
 
+/* Tell whether this type is user-defined rather than one of the built-ins. */
 int IsUserDefinedType(Typetable *type) {
     return type != NULL &&
            type != TLookup("int") &&
@@ -190,6 +209,7 @@ int IsUserDefinedType(Typetable *type) {
            type != TLookup("str_ptr");
 }
 
+/* Print type sizes and each type's field names, positions, and types. */
 void PrintTypeTable(void) {
     Typetable *type;
 
@@ -231,6 +251,7 @@ Gsymbol* Lookup(char *name) { // searches the symbol table and returns the addre
     return NULL;
 }
 
+/* Store the resolved type pointer in the global table; variables get memory bindings. */
 void Install(char *name, Typetable *type, int size, int rows, int cols, int isArray, Paramstruct *paramlist, int flabel) {
     // entry to symbol table
     if (type == NULL) {
@@ -277,6 +298,7 @@ void Install(char *name, Typetable *type, int size, int rows, int cols, int isAr
 }
 
 /* Task 2(a): a definition must have exactly the signature declared globally. */
+/* Check a definition against its declaration using exact type entries and parameter names. */
 void CheckFunctionDefinition(char *name, Typetable *returnType, Paramstruct *paramlist) {
     Gsymbol *function = Lookup(name);
     Paramstruct *declared;
@@ -540,12 +562,14 @@ tnode* makeStrNode(char *s) {
     return createTree(0, TYPE_STR, NODE_STR, s, NULL, NULL, NULL); // we put s into varname field as first arg (int val) is int
 }
 
+/* Create the special NULL value; assignment may use it for any user-defined type. */
 tnode* makeNullNode(void) {
     tnode *node = createTree(0, TYPE_NULL, NODE_NULL, NULL, NULL, NULL, NULL);
     node->typeEntry = TLookup("null");
     return node;
 }
 
+/* Check expression types; equality uses type-table identity, with NULL as the exception. */
 tnode* makeOperatorNode(char* op, tnode* l, tnode* r) {
     int nodetype;
     int type;
@@ -664,7 +688,9 @@ tnode* makeIdNode(char* name) {
     return node;
 }
 
+/* Require matching named types, except NULL may be assigned to a user-defined variable. */
 tnode* makeAssignNode(tnode* id, tnode* expr) {
+    /* NULL is the only value allowed to differ from the destination's named type. */
     // rhs null avanam + lhs null avaruth + lhs field indel athu null avaruth (field = null anel athu default type aan not user-defined)
     int nullToUserType = expr->typeEntry == TLookup("null") &&
                          IsUserDefinedType(id->typeEntry);
@@ -679,6 +705,7 @@ tnode* makeAssignNode(tnode* id, tnode* expr) {
     return createTree(0, TYPE_INT, NODE_ASSIGN, NULL, id, NULL, expr);
 }
 
+/* Check alloc() target and enforce the fixed allocator limit of 1 to 8 fields. */
 tnode* makeAllocNode(tnode *target) {
     int size;
     tnode *node;
@@ -688,6 +715,7 @@ tnode* makeAllocNode(tnode *target) {
         exit(1);
     }
 
+    /* The fixed allocator returns 8-word blocks, so reject larger types here. */
     size = GetSize(target->typeEntry);
     if (size <= 0 || size > 8) {
         fprintf(stderr,
@@ -701,6 +729,7 @@ tnode* makeAllocNode(tnode *target) {
     return node;
 }
 
+/* Require free() to receive a variable or field of a user-defined type. */
 tnode* makeFreeNode(tnode *target) {
     tnode *node;
 
@@ -939,6 +968,7 @@ tnode* makeArray2DNode(char *name, tnode *rowIndex, tnode *colIndex) {
 	return node;
 }
 
+/* Find a field on the current base type and return a node carrying that field's type. */
 tnode* makeFieldNode(tnode *base, char *fieldName) {
     Fieldlist *field;
     tnode *node;
@@ -953,6 +983,7 @@ tnode* makeFieldNode(tnode *base, char *fieldName) {
         exit(1);
     }
 
+    /* Use the preceding expression's type, so every nested field link is checked. */
     field = FLookup(base->typeEntry, fieldName);
     if (field == NULL) {
         fprintf(stderr, "Error: type '%s' has no field named '%s'\n",

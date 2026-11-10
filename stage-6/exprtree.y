@@ -89,11 +89,13 @@ int nextFunctionLabel = 0;
 // if it is partially matched it shifts to next state, expecting another token
 // if it matches a complete grammar rule, it reduces it into the non terminal on the left
 // runs the yacc code block, and continues on with the reduced state
+
+/* Type definitions must be read first so later variables, parameters, and fields can use them. */
 Program : TypeDefBlock GDeclBlock FDefBlock MainBlock { $$ = $4; }
         | TypeDefBlock GDeclBlock MainBlock           { $$ = $3; }
         | TypeDefBlock MainBlock                      { $$ = $2; };
 
-/* Type-table actions from the reference grammar need a type table in this project. */
+/* Build the type table before global declarations and function bodies are checked. */
 TypeDefBlock : TYPE TypeDefList ENDTYPE
              | /* empty */
              ;
@@ -102,6 +104,7 @@ TypeDefList : TypeDefList TypeDef
             | TypeDef
             ;
 
+/* Start an incomplete type, add its fields, then finalize its size. */
 TypeDef : ID '{' {
             if (TBeginDefinition($1) == NULL) {
                 fprintf(stderr, "Error: type '%s' is already defined or cannot be started\n", $1);
@@ -116,6 +119,7 @@ FieldDeclList : FieldDeclList FieldDecl
               | FieldDecl
               ;
 
+/* Add a field with its resolved type and next position in the containing type. */
 FieldDecl : FieldType ID SEMICOLON {
               Typetable *owner = TCurrentDefinition();
               if (owner == NULL ||
@@ -127,6 +131,7 @@ FieldDecl : FieldType ID SEMICOLON {
           }
           ;
 
+/* Field types may be primitive or a previously defined/self-referential named type. */
 FieldType : INT { $$ = TLookup("int"); }
           | STR { $$ = TLookup("str"); }
           | ID {
@@ -142,6 +147,7 @@ GDeclBlock : DECL GDeclList ENDDECL | DECL ENDDECL;
 
 GDeclList : GDeclList GDecl | GDecl;
 
+/* Resolve each global's type once; declarations store type-table pointers, not just names. */
 GDecl : TypeName VarList SEMICOLON {
     // if i have like 
     // int a, b;
@@ -171,6 +177,7 @@ GDecl : TypeName VarList SEMICOLON {
     }
 };
 
+/* Resolve a declared variable/function type; named types must already exist. */
 TypeName : INT { $$ = TLookup("int"); }
          | STR { $$ = TLookup("str"); }
          | ID  {
@@ -374,7 +381,7 @@ Variable : ID {
         $$ = makeDereferenceNode($2);
     };
 
-/* Resolve every segment against the type of the preceding base expression. */
+/* Resolve every segment against the preceding field's type, enabling a.b.c chains. */
 Field : Variable '.' ID {
             $$ = makeFieldNode($1, $3);
         }
@@ -385,6 +392,7 @@ Field : Variable '.' ID {
 
 FDefBlock : FDefBlock FDef | FDef;
 
+/* Function parameter and return types are checked by exact Typetable entry identity. */
 FDef : FType ID'('ParamList')' {
         CheckFunctionDefinition($2, $1, $4);
         BeginFunctionScope($4);
@@ -437,6 +445,7 @@ LdeclBlock : DECL LDecList ENDDECL | DECL ENDDECL;
 
 LDecList : LDecList LDecl | LDecl;
 
+/* Install local variables with the resolved type; type values use one local slot for their address. */
 LDecl : TypeName IdList SEMICOLON {
         InstallLocalVariables($2, $1);
     };
@@ -524,6 +533,7 @@ Body : T_BEGIN Slist ReturnStmt T_END { $$ = makeBodyNode($2, $3); }
 ReturnStmt : RETURN E SEMICOLON { $$ = makeReturnNode($2); };
 
 /* main is a function with no parameters and an int return type. */
+/* Initialize main's local scope and require its return expression to have the built-in int type. */
 MainBlock : INT MAIN '(' ')' '{' {
         BeginFunctionScope(NULL);
     } LdeclBlock Body '}' {
@@ -553,6 +563,7 @@ Slist : Slist Stmt {
         $$ = $1;
     };
 
+/* Stage 6 adds alloc/free statements; their constructors validate the target type here. */
 Stmt : InputStmt {
         $$ = $1;
     }
@@ -580,12 +591,14 @@ Stmt : InputStmt {
     | DoWhileStmt {
         $$ = $1;
     }
+    /* alloc stores a new block address in a user-defined variable or field. */
     | Variable ASSIGN ALLOC '(' ')' SEMICOLON {
         $$ = makeAllocNode($1);
     }
     | Field ASSIGN ALLOC '(' ')' SEMICOLON {
         $$ = makeAllocNode($1);
     }
+    /* free returns the block currently referenced by a user-defined variable or field. */
     | FREE '(' ID ')' SEMICOLON {
         $$ = makeFreeNode(makeIdNode($3));
     }
@@ -640,6 +653,7 @@ DoWhileStmt : DO Slist WHILE '(' E ')' SEMICOLON {
         $$ = makeDoWhileNode($2, $5);
     };
     
+/* NULL is a separate expression type; assignment/equality rules decide where it is allowed. */
 E : E PLUS E {
         $$ = makeOperatorNode("+", $1, $3);
     }
@@ -712,6 +726,7 @@ E : E PLUS E {
 
 %%
 
+/* Create built-in type entries, parse, print type/symbol tables, and generate target code. */
 extern FILE* yyin; // it is file pointer of lexer. defaulted to "stdin"
 int main(int argc, char* argv[]) {
     if (argc < 2) {

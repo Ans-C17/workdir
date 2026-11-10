@@ -53,6 +53,7 @@ void yyerror(const char* s);
 "enddecl" { return ENDDECL; }
 "int" { return INT; }
 "str" { return STR; }
+/* Stage 6 keywords for type definitions, NULL, and heap operations. */
 "type" { return TYPE; }
 "endtype" { return ENDTYPE; }
 "NULL" { return T_NULL; }

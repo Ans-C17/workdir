@@ -1,0 +1,17 @@
+begin
+    a = 2;
+
+    switch (a)
+        case 1:
+            write(10);
+            break;
+        case 2:
+            write(20);
+            break;
+        case 3:
+            write(30);
+            break;
+        default:
+            write(99);
+    endswitch;
+end;

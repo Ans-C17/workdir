@@ -35,7 +35,8 @@ MOV R2, -1
 MOV [R1], R2
 RET
 
-// Heapset: reserve 1024 for the free-list head; link blocks 1032..2040.
+// HEAPSET: no input. Link the eight-word blocks and return 0.
+// Address 1024 stores the free-list head; blocks run from 1032 through 2040.
 MOV R1, 1032
 MOV R2, 1040
 MOV R3, 2040
@@ -58,7 +59,8 @@ MOV R2, 0
 MOV [R1], R2
 RET
 
-// Alloc: remove and return the first free block; the fixed block size is 8.
+// ALLOC: size is at SP-4; return a block address at SP-1, or -1 on failure.
+// Remove the first free block. This fixed allocator accepts sizes from 1 to 8.
 MOV R1, SP
 MOV R2, 4
 SUB R1, R2
@@ -91,7 +93,8 @@ MOV R2, -1
 MOV [R1], R2
 RET
 
-// Free: validate the block address, reject a duplicate free, then relink it.
+// FREE: address is at SP-4; return 0 on success or -1 for an invalid block.
+// Validate alignment and duplicate frees, clear the block, then relink it.
 MOV R1, SP
 MOV R2, 4
 SUB R1, R2

@@ -1,0 +1,163 @@
+STAGE 6 - USER-DEFINED TYPES AND DYNAMIC MEMORY
+================================================
+
+This note covers only the Stage 6 additions in this folder: named types,
+fields, NULL, alloc(), free(), and the fixed-size heap. The important source
+paths are exprtree.y (syntax), exprtree.c (type checks and field lookup), and
+codegen.c (heap and field instructions).
+
+
+HOW THE PROGRAM PROGRESSES
+--------------------------
+
+1. exprtree.y parses type definitions before variables and functions.
+   TypeDef calls TBeginDefinition() before reading fields, so a type can name
+   itself in a field (for example, node next). Each FieldDecl calls FInstall()
+   to store the field name, its type, and its position. TFinishDefinition()
+   completes the type after the closing brace.
+
+2. GDecl and LDecl resolve each variable's type name through TLookup() and
+   store a pointer to that type-table entry in the symbol table. Function
+   parameters and return types also keep these type entries.
+
+3. While parsing an expression like list.next.data, the Field grammar builds
+   one field node for each dot. makeFieldNode() looks up the named field on
+   the type of the expression before the dot. This gives the new node the
+   field's own type, so the next dot can be checked too.
+
+4. Type checks compare type-table entries. In practice, two variables must
+   use the same named type. Two separately declared types with identical
+   fields are still different types. NULL is the special exception: it can be
+   assigned to, or compared with, a user-defined type.
+
+5. alloc() and free() grammar actions call makeAllocNode() and makeFreeNode().
+   These reject non-user-defined targets; alloc() also rejects a type with
+   more than eight fields. The parser has checked the source before code
+   generation begins.
+
+6. generateProgram() writes the program header, initializes the heap, then
+   generates each saved function. codeGen() handles field reads/writes and
+   alloc/free nodes.
+
+
+TYPE TABLE: WHAT IT STORES
+--------------------------
+
+Typetable has a type name, its size, a list of fields, and a link to the next
+type. The table begins with built-in types (int, str, bool, void, null, and
+primitive pointer types). Fieldlist stores each field's name, its type entry,
+and its fieldIndex.
+
+TBeginDefinition() first adds an empty type entry. This is what lets
+    type node { int value; node next; }
+refer to node while node is still being defined. FieldType permits built-in
+int/str, the type currently being defined, or an earlier user-defined type.
+It rejects an unknown type and a later, not-yet-defined type.
+
+Each user-defined variable stores one address word in regular program memory.
+Its actual fields live in a heap block. GetSize(type) returns the number of
+fields, and each field takes one word in that block.
+
+
+FIELDS AND MEMORY ADDRESSES
+---------------------------
+
+makeFieldNode(base, fieldName) finds the field in base->typeEntry. It stores
+the field's type entry and Fieldlist pointer on the new AST node. The recursive
+Field grammar allows chains such as a.b.c.
+
+lvalueAddress() handles a field by first finding the address of its base
+expression. It loads the pointer stored there (the heap object's address),
+then adds Fentry->fieldIndex. For a chain like a.b.c, this process repeats at
+each field. The returned register points at the final field's word. NODE_FIELD
+loads from that address; assignment/read use it as a destination.
+
+If adding a new kind of field base, update makeFieldNode() and lvalueAddress()
+and check both reading and assigning through that form.
+
+
+HEAP: alloc() AND free()
+------------------------
+
+The heap uses addresses 1024 through 2047. Address 1024 stores the head of a
+free-block list. Blocks are 8 words long, starting at 1032, 1040, ... , 2040.
+The first word of a free block stores the address of the next free block; -1
+marks the end. The remaining words are available for the object's fields.
+
+emitHeapInit() writes startup instructions that link all blocks and set the
+head at address 1024. It is called by generateProgram() before jumping to
+MAIN.
+
+emitAlloc(resultReg, savedTop, size) writes instructions that save live
+registers, check that size is 1 to 8, remove the head block, and place its
+address in resultReg. If the size is invalid or no block remains, it returns
+-1 in resultReg. The NODE_ALLOC case then stores that address in the target
+variable or field.
+
+emitFree(pointerReg, savedTop) writes instructions that save live registers,
+check that the address is in the heap and on an 8-word boundary, and reject
+an address already in the free list. It clears the block and adds it to the
+front of the list. NODE_FREE gets the target's stored pointer and calls this
+code. It does not reset the source variable, so the variable still contains
+the old address after free().
+
+Register saving matters because the generated allocator uses R1-R5 while the
+surrounding expression may have values in those registers. If changing the
+allocator's scratch registers, keep saveRegsThrough() and
+restoreRegsThrough() in sync.
+
+
+FUNCTIONS TO FIND QUICKLY
+-------------------------
+
+exprtree.c
+
+CreateTypeEntry()       Adds a type-table row to the linked list.
+TypeTableCreate()       Adds the built-in type rows before parsing starts.
+TLookup()               Finds a type by name.
+TInstall()               Adds a type row; checks fields when a list is supplied.
+TBeginDefinition()       Starts a type early to allow self-reference.
+FInstall()               Adds one field to the type being defined.
+TFinishDefinition()     Finishes a type and records its field count.
+FLookup()                Finds a field by name within a type.
+GetSize()                Returns the field count used by alloc().
+IsUserDefinedType()     Distinguishes named user types from built-in types.
+Install()                Adds a global symbol with its Typetable pointer.
+makeAssignNode()         Enforces same-name type assignment, with NULL exception.
+makeAllocNode()          Checks alloc target and eight-field limit.
+makeFreeNode()           Checks free target type.
+makeFieldNode()          Resolves a field and sets the result type.
+
+codegen.c
+
+lvalueAddress()          Calculates addresses for variables, arrays, and fields.
+saveRegsThrough()        Saves registers before allocator instructions use them.
+restoreRegsThrough()     Restores those registers afterward.
+emitHeapInit()           Builds the free-block list in generated startup code.
+emitAlloc()              Generates code that removes a block from the list.
+emitFree()               Generates code that returns a block to the list.
+codeGen()                Handles NODE_FIELD, NODE_ALLOC, and NODE_FREE.
+generateProgram()        Calls heap initialization before generating MAIN/functions.
+
+exprtree.y
+
+TypeDef / FieldDecl      Build named types and their fields.
+FieldType                Resolves permitted field types.
+TypeName                 Resolves variable, parameter, and return types.
+Field                    Parses one or more chained .field accesses.
+Stmt alloc/free rules    Turn alloc/free syntax into checked AST nodes.
+main()                   Calls TypeTableCreate() before yyparse().
+
+
+IMPLEMENTATION DETAIL TO REMEMBER
+---------------------------------
+
+The handout describes putting heap routines in the runtime library. This
+folder has Alloc/Free routines in library.lib, but codegen.c also emits heap
+initialization and alloc/free instructions directly into each generated
+program through emitHeapInit(), emitAlloc(), and emitFree(). For the code path
+this compiler uses, follow codegen.c and target.xsm.
+
+The handout says to reject a type with more than eight fields when defining
+it. This implementation checks the eight-field limit when alloc() is used
+for that type, in makeAllocNode().

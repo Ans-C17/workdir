@@ -1,0 +1,193 @@
+#ifndef EXPRTREE_H
+#define EXPRTREE_H
+
+enum {
+    NODE_NUM,
+    NODE_STR,
+    NODE_ID,
+    NODE_ADDRESS,
+    NODE_DEREFERENCE,
+    NODE_ARRAY,
+    NODE_ARRAY2D,
+    NODE_PLUS,
+    NODE_MINUS,
+    NODE_MUL,
+    NODE_DIV,
+    NODE_MOD,
+    NODE_READ,
+    NODE_WRITE,
+    NODE_ASSIGN,
+    NODE_CONNECTOR,
+    NODE_LT,
+    NODE_GT,
+    NODE_LE,
+    NODE_GE,
+    NODE_NE,
+    NODE_EQ,
+    NODE_IF,
+    NODE_WHILE,
+    NODE_BREAK,
+    NODE_CONTINUE,
+    NODE_REPEAT,
+    NODE_DOWHILE,
+    NODE_RETURN,
+    NODE_BODY,
+    NODE_FUNCTION,
+    NODE_MAIN,
+    NODE_ARG_LIST,
+    NODE_OR,
+    NODE_AND,
+    NODE_FIELD
+};
+
+enum {
+	TYPE_INT,
+    TYPE_BOOL,
+    TYPE_STR,
+    TYPE_INT_PTR,
+    TYPE_STR_PTR
+};
+
+#define TYPE_TUPLE_BASE 1000
+#define TYPE_TUPLE_PTR_BASE 2000
+
+/* Function signature list; declaration and definition lists are compared by name/type/order. */
+typedef struct Paramstruct {
+    char* name;
+    int type;
+    int isArray;       // 1 when this formal receives an array address
+    int rows;          // 0 means any row count for a 2D array parameter
+    int cols;          // required column count for a 2D array parameter
+    struct Paramstruct* next;
+} Paramstruct;
+
+typedef struct Field {
+    char *name;
+    int type;
+    int offset;
+    struct Field *next;
+} Field;
+
+typedef struct TupleType {
+    char *name;
+    int type;
+    int size;
+    Field *fields;
+    struct TupleType *next;
+} TupleType;
+
+typedef struct VarList { // int a, b, c indel, oronninum oru node aayit linked list aakan
+    // install() vilikumbo ivarellarum gsymbol tableilek povum
+    char* name;
+    int size; // arrays aanel we declare value for this size
+    int rows; // number of rows for 2D array
+    int cols; // number of columns for 2D array
+    int isArray;
+    int isPointer; // 1 if pointer, else 0
+    int isFunction; // distinguishes a function declaration from a variable declaration
+    struct Paramstruct* paramlist;
+    struct VarList* next;
+} VarList;
+
+/* Global binding: variables use binding; functions use paramlist and flabel. */
+typedef struct Gsymbol {
+    char *name; // name of var or func
+    int type; // type of var 
+    int size; // default 1, we take the value of varlist and copy it here, gtable is the collection of all varlists
+    int rows;
+	int cols;
+    int isArray;
+    int binding; // memory address of the global vars (4096 muthal oro var size anusarich) so we can assign address b4 program executes
+    struct Paramstruct* paramlist; // parameters of a fn is linked list, athinte head
+    int flabel; // f0, f1 etc. when program sees "fibonacci" -> it looks it up in the symbol table, finds its flabel, does CALL F1, then label translated
+    struct Gsymbol* next; // next gsymboltable entry
+} Gsymbol;
+
+/* Function-local binding; binding is relative to BP (negative for parameters, positive for locals). */
+typedef struct Lsymbol {
+    char *name;
+    int type;
+    int binding; // relative to BP, value given during runtime, BP = currently run cheyyana functionte activation recordinte base address
+    int isArray;
+    int isArrayParam;
+    int size;
+    int rows;
+    int cols;
+    struct Lsymbol *next;
+} Lsymbol;
+
+/* Typed AST node shared by parser, semantic checks, and code generator. */
+typedef struct tnode {
+	int type; // type of variable - INT, BOOL for now
+	int val; // value of a number for NUM nodes - 5, 10
+	char* varname; // name of a variable for ID nodes - a,b,...,z
+    int nodetype; // information about non-leaf nodes - read/write/connector/+/* etc
+    Gsymbol* Gentry; // pointer to corresponding GST entry
+    Lsymbol* Lentry; // pointer to corresponding local-symbol-table entry
+    struct tnode *arglist; // expressions passed to a function call
+    struct tnode *left, *middle, *right;
+} tnode;
+
+/* Completed function AST plus local table retained until code generation finishes. */
+typedef struct FunctionAST {
+    char *name;
+    tnode *tree;
+    Lsymbol *localTable;
+    int localCount;
+    struct FunctionAST *next;
+} FunctionAST;
+
+extern FunctionAST *FunctionASTHead;
+extern int nextBinding;
+
+tnode* createTree(int val, int type, int nodetype, char* varname, tnode* l, tnode* m, tnode* r);
+
+tnode* makeNumNode(int n);
+tnode* makeStrNode(char *s);
+
+tnode* makeOperatorNode(char* op, tnode* l, tnode* r);
+tnode* makeIdNode(char* name);
+tnode* makeAssignNode(tnode* id, tnode* expr);
+tnode* makeReadNode(tnode* id);
+tnode* makeWriteNode(tnode* expr);
+tnode* makeConnectorNode(tnode* l, tnode* r);
+
+tnode* makeIfNode(tnode* cond, tnode* thenStmt, tnode* elseStmt);
+tnode* makeWhileNode(tnode* cond, tnode* body);
+
+tnode* makeBreakNode();
+tnode* makeContinueNode();
+
+tnode* makeRepeatNode(tnode* body, tnode* cond);
+tnode* makeDoWhileNode(tnode* body, tnode* cond);
+tnode* makeReturnNode(tnode *expr);
+tnode* makeBodyNode(tnode *statements, tnode *returnNode);
+tnode* finalizeBodyNode(tnode *body, int returnType, char *functionName);
+tnode* makeFunctionCallNode(char *name, tnode *arglist);
+tnode* makeArgListNode(tnode *expr);
+tnode* appendArgNode(tnode *arglist, tnode *expr);
+void SaveFunctionAST(char *name, tnode *body, int isMain);
+
+tnode* makeArrayNode(char* name, tnode* index); // for accessing array elements
+tnode* makeArray2DNode(char *name, tnode *rowIndex, tnode *colIndex);
+
+tnode* makeAddressNode(tnode *var); // creates an AST node for the address-of operator
+tnode* makeDereferenceNode(tnode *ptr); // creates an AST node for dereferencing a pointer
+tnode* makeFieldNode(char *tupleName, char *fieldName);
+
+struct Gsymbol* Lookup(char* name);
+void Install(char* name, int type, int size, int rows, int cols, int isArray, Paramstruct *paramlist, int flabel); // add new var to symbol table    
+/* Stage 5 scope/signature lifecycle and call-node construction entry points. */
+void CheckFunctionDefinition(char *name, int returnType, Paramstruct *paramlist);
+Lsymbol *LLookup(char *name);
+void BeginFunctionScope(Paramstruct *paramlist);
+void InstallLocalVariables(VarList *varlist, int type);
+void EndFunctionScope(void);
+void PrintLocalSymbolTable(char *functionName);
+void PrintSymbolTable();
+int InstallTupleType(char *name, Field *fields);
+int TupleTypeLookup(char *name);
+int TuplePointerType(int tupleType);
+int TypeSize(int type);
+
+#endif
