@@ -1,0 +1,35 @@
+type
+    Student {
+        int id;
+        int marks[3];
+        int exams[2][2];
+    }
+endtype
+
+decl
+    Student student;
+enddecl
+
+int main()
+{
+    decl
+    enddecl
+
+    begin
+        student = alloc();
+
+        student.id = 42;
+        student.marks[0] = 88;
+        student.marks[1] = 91;
+        student.marks[2] = 76;
+        student.exams[1][0] = 95;
+
+        write(student.id);
+        write(student.marks[0]);
+        write(student.marks[1]);
+        write(student.marks[2]);
+        write(student.exams[1][0]);
+
+        return 0;
+    end
+}
