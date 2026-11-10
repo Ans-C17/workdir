@@ -220,16 +220,19 @@ ClassField : INT ID SEMICOLON {
            }
            ;
 
+/* Repeated method names are allowed when their parameter type signatures
+   differ; Class_Minstall rejects duplicate signatures and preserves inherited
+   virtual slots for exact-signature overrides. */
 ClassMethodDecl : INT ID '(' ParamList ')' SEMICOLON {
                     if (Class_Minstall(currentClass, $2, TLookup("int"), $4) == NULL) {
-                        fprintf(stderr, "Error: method '%s' is invalid, duplicated, has an incompatible override signature, or exceeds the 8-method limit in class '%s'\n",
+                        fprintf(stderr, "Error: method '%s' has a duplicate signature, incompatible override, invalid declaration, or exceeds the 8-method limit in class '%s'\n",
                                 $2, currentClass == NULL ? "?" : currentClass->name);
                         exit(1);
                     }
                 }
                 | STR ID '(' ParamList ')' SEMICOLON {
                     if (Class_Minstall(currentClass, $2, TLookup("str"), $4) == NULL) {
-                        fprintf(stderr, "Error: method '%s' is invalid, duplicated, has an incompatible override signature, or exceeds the 8-method limit in class '%s'\n",
+                        fprintf(stderr, "Error: method '%s' has a duplicate signature, incompatible override, invalid declaration, or exceeds the 8-method limit in class '%s'\n",
                                 $2, currentClass == NULL ? "?" : currentClass->name);
                         exit(1);
                     }
@@ -237,7 +240,7 @@ ClassMethodDecl : INT ID '(' ParamList ')' SEMICOLON {
                 | ID ID '(' ParamList ')' SEMICOLON {
                     Typetable *returnType = TLookup($1);
                     if (returnType == NULL || Class_Minstall(currentClass, $2, returnType, $4) == NULL) {
-                        fprintf(stderr, "Error: method '%s' has an invalid return type, duplicate name, incompatible override signature, or exceeds the 8-method limit in class '%s'\n",
+                        fprintf(stderr, "Error: method '%s' has an invalid return type, duplicate signature, incompatible override, or exceeds the 8-method limit in class '%s'\n",
                                 $2, currentClass == NULL ? "?" : currentClass->name);
                         exit(1);
                     }

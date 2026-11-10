@@ -232,12 +232,11 @@ static void FreeClassParams(Paramstruct *param) {
     }
 }
 
-static int SameMethodSignature(Typetable *returnType, Paramstruct *params,
-                               Memberfunclist *inherited) {
+static int SameMethodParameters(Paramstruct *params, Memberfunclist *method) {
     Paramstruct *expected;
 
-    if (inherited == NULL || inherited->type != returnType) return 0;
-    expected = inherited->paramlist;
+    if (method == NULL) return 0;
+    expected = method->paramlist;
     while (expected != NULL && params != NULL) {
         if (expected->type != params->type ||
             expected->classType != params->classType) return 0;
@@ -417,22 +416,28 @@ Memberfunclist *Class_Mlookup(Classtable *classEntry, char *name) {
 
 Memberfunclist *Class_Minstall(Classtable *classEntry, char *name,
                                Typetable *returnType, Paramstruct *paramlist) {
-    Memberfunclist *method, *tail;
+    Memberfunclist *method, *tail, *inheritedMatch = NULL;
     if (classEntry == NULL || name == NULL || returnType == NULL) return NULL;
 
-    method = Class_Mlookup(classEntry, name);
-    if (method != NULL) {
-        if (method->ownerClass == classEntry ||
-            !SameMethodSignature(returnType, paramlist, method))
-            return NULL;
+    for (method = classEntry->vfuncptr; method != NULL; method = method->next) {
+        if (strcmp(method->name, name) != 0 ||
+            !SameMethodParameters(paramlist, method)) continue;
 
-        FreeClassParams(method->paramlist);
-        method->paramlist = paramlist;
-        method->type = returnType;
-        method->ownerClass = classEntry;
-        method->flabel = nextFunctionLabel++;
-        method->isDefined = 0;
-        return method;
+        /* A matching inherited signature overrides its existing virtual slot.
+           A matching method declared by this class is a duplicate. */
+        if (method->ownerClass == classEntry) return NULL;
+        if (method->type != returnType) return NULL;
+        inheritedMatch = method;
+        break;
+    }
+    if (inheritedMatch != NULL) {
+        FreeClassParams(inheritedMatch->paramlist);
+        inheritedMatch->paramlist = paramlist;
+        inheritedMatch->type = returnType;
+        inheritedMatch->ownerClass = classEntry;
+        inheritedMatch->flabel = nextFunctionLabel++;
+        inheritedMatch->isDefined = 0;
+        return inheritedMatch;
     }
 
     if (classEntry->methodCount >= 8) return NULL;
@@ -461,11 +466,20 @@ Memberfunclist *Class_Minstall(Classtable *classEntry, char *name,
 
 Memberfunclist *Class_MatchMethodDefinition(Classtable *classEntry, char *name,
                                             Typetable *returnType, Paramstruct *paramlist) {
-    Memberfunclist *method = Class_Mlookup(classEntry, name);
+    Memberfunclist *method = NULL;
+    Memberfunclist *candidate;
     Paramstruct *declared;
     Paramstruct *defined;
     int position = 1;
 
+    for (candidate = classEntry == NULL ? NULL : classEntry->vfuncptr;
+         candidate != NULL; candidate = candidate->next) {
+        if (strcmp(candidate->name, name) == 0 &&
+            SameMethodParameters(paramlist, candidate)) {
+            method = candidate;
+            break;
+        }
+    }
     if (method == NULL) {
         fprintf(stderr, "Error: method '%s' is defined but not declared in class '%s'\n",
                 name == NULL ? "?" : name,
@@ -1424,6 +1438,18 @@ static int ArgumentMatchesParameter(Paramstruct *parameter, tnode *argument) {
            parameter->type == argument->typeEntry;
 }
 
+static int MethodArgumentsMatch(Memberfunclist *method, tnode *arglist) {
+    Paramstruct *formal = method->paramlist;
+    tnode *actual = arglist;
+
+    while (formal != NULL && actual != NULL) {
+        if (!ArgumentMatchesParameter(formal, actual->left)) return 0;
+        formal = formal->next;
+        actual = actual->right;
+    }
+    return formal == NULL && actual == NULL;
+}
+
 tnode* makeFunctionCallNode(char *name, tnode *arglist) {
     if (activeMethodClass != NULL) {
         fprintf(stderr, "Error: method '%s' cannot call a global function from class '%s'\n",
@@ -1654,9 +1680,6 @@ tnode* makeFieldValueNode(tnode *memberAccess) {
 tnode* makeMethodCallNode(tnode *memberAccess, tnode *arglist) {
     Memberfunclist *method;
     tnode *receiver;
-    tnode *actual;
-    Paramstruct *formal;
-    int position = 1;
     tnode *node;
     int validReceiver = 0;
 
@@ -1665,8 +1688,25 @@ tnode* makeMethodCallNode(tnode *memberAccess, tnode *arglist) {
         fprintf(stderr, "Error: member name is not a declared method\n");
         exit(1);
     }
-    method = memberAccess->Mentry;
+    method = NULL;
     receiver = memberAccess->left;
+
+    /* Resolve against the receiver's static class and the actual argument
+       types. This selects a declared overload while leaving runtime dispatch
+       to that overload's stable virtual-table slot. */
+    for (Memberfunclist *candidate = memberAccess->classOwner->vfuncptr;
+         candidate != NULL; candidate = candidate->next) {
+        if (strcmp(candidate->name, memberAccess->varname) == 0 &&
+            MethodArgumentsMatch(candidate, arglist)) {
+            method = candidate;
+            break;
+        }
+    }
+    if (method == NULL) {
+        fprintf(stderr, "Error: no overload of method '%s' matches these arguments\n",
+                memberAccess->varname);
+        exit(1);
+    }
 
     if (IsSelfNode(receiver)) {
         validReceiver = activeMethodClass != NULL &&
@@ -1682,25 +1722,6 @@ tnode* makeMethodCallNode(tnode *memberAccess, tnode *arglist) {
     }
     if (!validReceiver) {
         fprintf(stderr, "Error: method call is not permitted through this receiver\n");
-        exit(1);
-    }
-
-    formal = method->paramlist;
-    actual = arglist;
-    while (formal != NULL && actual != NULL) {
-        tnode *argument = actual->left;
-        if (!ArgumentMatchesParameter(formal, argument)) {
-            fprintf(stderr, "Error: argument %d of method '%s' has the wrong type\n",
-                    position, method->name);
-            exit(1);
-        }
-        formal = formal->next;
-        actual = actual->right;
-        position++;
-    }
-    if (formal != NULL || actual != NULL) {
-        fprintf(stderr, "Error: argument count of method '%s' does not match its declaration\n",
-                method->name);
         exit(1);
     }
 

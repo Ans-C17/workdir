@@ -1,0 +1,48 @@
+class Parent {
+    decl
+        int info(int n);
+    enddecl
+
+    int info(int n) {
+        decl
+        enddecl
+
+        begin
+            write(n);
+            return 0;
+        end
+    }
+}
+
+Child extends Parent {
+    decl
+        int info(str s);
+    enddecl
+
+    int info(str s) {
+        decl
+        enddecl
+
+        begin
+            write(s);
+            return 0;
+        end
+    }
+}
+endclass
+
+decl
+    Child c;
+    int result;
+enddecl
+
+int main() {
+    decl
+    enddecl
+    begin
+        c = new(Child);
+        result = c.info(123);
+        result = c.info("inherited overload still works");
+        return 0;
+    end
+}
