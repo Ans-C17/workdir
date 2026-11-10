@@ -660,6 +660,51 @@ void PrintClassTable(void) {
                    parameters, method->flabel);
         }
     }
+
+    /* Show the runtime table exactly as initializeVirtualFunctionTables() lays
+       it out: eight words per class, with each method label stored at its slot. */
+    printf("\nVirtual Function Tables (runtime layout)\n");
+    printf("%-20s %-12s %-16s %-40s %-20s %s\n",
+           "Class", "Slot", "Memory address", "Method signature", "Implementation", "Stored target");
+    printf("%-20s %-12s %-16s %-40s %-20s %s\n",
+           "--------------------", "------------", "----------------", "----------------------------------------",
+           "--------------------", "-------------");
+    for (classEntry = Chead; classEntry != NULL; classEntry = classEntry->next) {
+        int slot;
+        int tableBase = 4096 + classEntry->classIndex * 8;
+
+        for (slot = 0; slot < 8; ++slot) {
+            Memberfunclist *method;
+            for (method = classEntry->vfuncptr; method != NULL; method = method->next) {
+                if (method->funcposition == slot) break;
+            }
+
+            if (method == NULL) {
+                printf("%-20s %-12d %-16d %-40s %-20s %s\n",
+                       classEntry->name, slot, tableBase + slot, "<empty>", "-", "0");
+            } else {
+                char signature[256];
+                Paramstruct *param;
+                size_t used;
+
+                snprintf(signature, sizeof(signature), "%s(", method->name);
+                for (param = method->paramlist; param != NULL; param = param->next) {
+                    used = strlen(signature);
+                    snprintf(signature + used, sizeof(signature) - used, "%s%s",
+                             used > strlen(method->name) + 1 ? ", " : "",
+                             param->classType != NULL ? param->classType->name :
+                             param->type != NULL ? param->type->name : "?");
+                }
+                used = strlen(signature);
+                snprintf(signature + used, sizeof(signature) - used, ")");
+
+                printf("%-20s %-12d %-16d %-40s %-20s F%d\n",
+                       classEntry->name, slot, tableBase + slot, signature,
+                       method->ownerClass == NULL ? "?" : method->ownerClass->name,
+                       method->flabel);
+            }
+        }
+    }
 }
 
 Fieldlist *FLookup(Typetable *type, char *name) {

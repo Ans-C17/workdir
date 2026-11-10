@@ -1,5 +1,5 @@
 class
-Base {
+Parent {
     decl
         int choose(int value);
         int choose(int value, int multiplier);
@@ -21,17 +21,31 @@ Base {
         end
     }
 }
+
+Child extends Parent {
+    decl
+        int choose(int value);
+    enddecl
+
+    int choose(int value) {
+        decl
+        enddecl
+        begin
+            return value + 100;
+        end
+    }
+}
 endclass
 
 decl
-    Base item;
+    Child item;
 enddecl
 
 int main() {
     decl
     enddecl
     begin
-        item = new(Base);
+        item = new(Child);
         write(item.choose(5));
         write(item.choose(5, 4));
         return 0;
