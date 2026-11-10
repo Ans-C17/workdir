@@ -51,6 +51,7 @@ enum {
 #define TYPE_TUPLE_BASE 1000
 #define TYPE_TUPLE_PTR_BASE 2000
 
+/* Function signature list; declaration and definition lists are compared by name/type/order. */
 typedef struct Paramstruct {
     char* name;
     int type;
@@ -84,6 +85,7 @@ typedef struct VarList { // int a, b, c indel, oronninum oru node aayit linked l
     struct VarList* next;
 } VarList;
 
+/* Global binding: variables use binding; functions use paramlist and flabel. */
 typedef struct Gsymbol {
     char *name; // name of var or func
     int type; // type of var 
@@ -96,6 +98,7 @@ typedef struct Gsymbol {
     struct Gsymbol* next; // next gsymboltable entry
 } Gsymbol;
 
+/* Function-local binding; binding is relative to BP (negative for parameters, positive for locals). */
 typedef struct Lsymbol {
     char *name;
     int type;
@@ -103,6 +106,7 @@ typedef struct Lsymbol {
     struct Lsymbol *next;
 } Lsymbol;
 
+/* Typed AST node shared by parser, semantic checks, and code generator. */
 typedef struct tnode {
 	int type; // type of variable - INT, BOOL for now
 	int val; // value of a number for NUM nodes - 5, 10
@@ -114,6 +118,7 @@ typedef struct tnode {
     struct tnode *left, *middle, *right;
 } tnode;
 
+/* Completed function AST plus local table retained until code generation finishes. */
 typedef struct FunctionAST {
     char *name;
     tnode *tree;
@@ -162,6 +167,7 @@ tnode* makeFieldNode(char *tupleName, char *fieldName);
 
 struct Gsymbol* Lookup(char* name);
 void Install(char* name, int type, int size, int rows, int cols, Paramstruct *paramlist, int flabel); // add new var to symbol table    
+/* Stage 5 scope/signature lifecycle and call-node construction entry points. */
 void CheckFunctionDefinition(char *name, int returnType, Paramstruct *paramlist);
 Lsymbol *LLookup(char *name);
 void BeginFunctionScope(Paramstruct *paramlist);

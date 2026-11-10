@@ -13,6 +13,7 @@ int nextLocalBinding = 1;
 FunctionAST *FunctionASTHead = NULL;
 static FunctionAST *functionASTTail = NULL;
 
+/* Find tuple metadata by its numeric type ID. */
 static TupleType *FindTupleByType(int type) {
     TupleType *tuple = TupleHead;
     while (tuple != NULL) {
@@ -22,6 +23,7 @@ static TupleType *FindTupleByType(int type) {
     return NULL;
 }
 
+/* Find a tuple's numeric type by its declared name. */
 int TupleTypeLookup(char *name) {
     TupleType *tuple = TupleHead;
     while (tuple != NULL) {
@@ -31,15 +33,18 @@ int TupleTypeLookup(char *name) {
     return -1;
 }
 
+/* Map a tuple value type ID to the corresponding tuple-pointer type ID. */
 int TuplePointerType(int tupleType) {
     return TYPE_TUPLE_PTR_BASE + (tupleType - TYPE_TUPLE_BASE);
 }
 
+/* Return tuple storage width in words; all scalar and pointer types occupy one. */
 int TypeSize(int type) {
     TupleType *tuple = FindTupleByType(type);
     return tuple == NULL ? 1 : tuple->size;
 }
 
+/* Validate fields, assign sequential offsets, and register a new tuple type. */
 int InstallTupleType(char *name, Field *fields) {
     TupleType *tuple;
     Field *field;
@@ -70,6 +75,7 @@ int InstallTupleType(char *name, Field *fields) {
     return tuple->type;
 }
 
+/* Search the global table by name; used for variables, function signatures, and labels. */
 Gsymbol* Lookup(char *name) { // searches the symbol table and returns the address of the matching symbol-table entry
     Gsymbol* temp = Ghead;
 
@@ -82,6 +88,12 @@ Gsymbol* Lookup(char *name) { // searches the symbol table and returns the addre
     return NULL;
 }
 
+/*
+ * Install one global variable or function signature.
+ * Inputs: name/type/storage dimensions/signature/label from GDecl. Return: none.
+ * Variables receive nextBinding storage; functions store paramlist/flabel and
+ * no data binding. GDecl is the caller; duplicate names are rejected here.
+ */
 void Install(char *name, int type, int size, int rows, int cols, Paramstruct *paramlist, int flabel) { 
     // entry to symbol table
     if (Lookup(name)) {
@@ -123,6 +135,12 @@ void Install(char *name, int type, int size, int rows, int cols, Paramstruct *pa
 }
 
 /* Task 2(a): a definition must have exactly the signature declared globally. */
+/*
+ * Compare a definition header against its global declaration.
+ * Inputs: function name, return type, and definition parameter list. Return: none.
+ * Checks existence, function-vs-variable, return type, parameter names/types,
+ * and count; exits on mismatch. Called at the start of FDef in exprtree.y.
+ */
 void CheckFunctionDefinition(char *name, int returnType, Paramstruct *paramlist) {
     Gsymbol *function = Lookup(name);
     Paramstruct *declared;
@@ -163,6 +181,7 @@ void CheckFunctionDefinition(char *name, int returnType, Paramstruct *paramlist)
     }
 }
 
+/* Search the active function's local/parameter list; makeIdNode checks this before globals. */
 Lsymbol *LLookup(char *name) {
     Lsymbol *temp = Lhead;
 
@@ -182,6 +201,7 @@ b      INT    -4    ← parameter
 x      INT     1    ← local
 msg    STR     2    ← local */
 
+/* Append one local/parameter with its BP offset; reject duplicate local names. */
 static void LInstall(char *name, int type, int binding) {
     Lsymbol *entry;
     Lsymbol *temp;
@@ -209,6 +229,11 @@ static void LInstall(char *name, int type, int binding) {
 }
 
 /* Parameters are below BP; locals are above BP in the activation record. */
+/*
+ * Start a new function scope and install parameters at BP-3, BP-4, etc.
+ * Input: formal parameter list (NULL for main/no-argument functions). Return: none.
+ * Resets Lhead/nextLocalBinding. Called before parsing each function's locals.
+ */
 void BeginFunctionScope(Paramstruct *paramlist) {
     int parameterBinding = -3;
 
@@ -220,6 +245,7 @@ void BeginFunctionScope(Paramstruct *paramlist) {
     }
 }
 
+/* Add local declarations at positive BP offsets; tuple locals advance by their full size. */
 void InstallLocalVariables(VarList *varlist, int type) {
     while (varlist != NULL) {
         LInstall(varlist->name, type, nextLocalBinding++);
@@ -228,11 +254,17 @@ void InstallLocalVariables(VarList *varlist, int type) {
     }
 }
 
+/* Clear active local lookup after saving the AST; AST nodes still retain Lsymbol pointers. */
 void EndFunctionScope(void) {
     /* The AST nodes retain their Lsymbol pointers; later stages free them after codegen. */
     Lhead = NULL;
 }
 
+/*
+ * Append the completed function tree to FunctionASTHead for later codegen.
+ * Inputs: function name, finalized body, and whether this is main. Return: none.
+ * Retains the local-table nodes referenced by the AST and counts local words.
+ */
 void SaveFunctionAST(char *name, tnode *body, int isMain) {
     FunctionAST *entry = calloc(1, sizeof(FunctionAST));
     Lsymbol *local = Lhead;
@@ -259,6 +291,7 @@ void SaveFunctionAST(char *name, tnode *body, int isMain) {
     functionASTTail = entry;
 }
 
+/* Convert internal type IDs to printable names for symbol-table output. */
 static const char *TypeName(int type) {
     static char tupleName[80];
     TupleType *tuple;
@@ -282,11 +315,13 @@ static const char *TypeName(int type) {
     }
 }
 
+/* Print the shared column heading for local and global symbol tables. */
 static void PrintTableHeader(void) {
     printf("%-16s %-10s %-8s %-10s %-24s %-14s\n",
            "Name", "Type", "Size", "Binding", "Parameters", "Function label");
 }
 
+/* Print the currently active function's parameters and locals. */
 void PrintLocalSymbolTable(char *functionName) {
     Lsymbol *temp = Lhead;
 
@@ -299,6 +334,7 @@ void PrintLocalSymbolTable(char *functionName) {
     }
 }
 
+/* Print global variables and function signatures, including each function label. */
 void PrintSymbolTable() {
     Gsymbol *temp = Ghead;
     printf("\nGlobal Symbol Table\n");
@@ -331,6 +367,7 @@ void PrintSymbolTable() {
     }
 }
 
+/* Build a pointer-valued node for taking the address of a supported variable/field. */
 tnode* makeAddressNode(tnode *var) { // creates an AST node for the address-of operator
     if (var->nodetype != NODE_ID && var->nodetype != NODE_FIELD) {
         fprintf(stderr, "Address-of operator can only be used with a variable\n");
@@ -353,6 +390,7 @@ tnode* makeAddressNode(tnode *var) { // creates an AST node for the address-of o
     return createTree(0, pointerType, NODE_ADDRESS, NULL, var, NULL, NULL);
 }
 
+/* Build an l-value node of the pointed-to type; reject non-pointer operands. */
 tnode* makeDereferenceNode(tnode *ptr) { // EX2: creates an AST node for dereferencing a pointer
     int valueType;
 
@@ -370,6 +408,7 @@ tnode* makeDereferenceNode(tnode *ptr) { // EX2: creates an AST node for derefer
     return createTree(0, valueType, NODE_DEREFERENCE, NULL, ptr, NULL, NULL);
 }
 
+/* Allocate a zero-initialized AST node with the supplied type, kind, and children. */
 tnode* createTree(int val, int type, int nodetype, char* varname, tnode* l, tnode* m, tnode* r) {
     tnode* temp = (tnode*)malloc(sizeof(tnode));
 
@@ -387,14 +426,17 @@ tnode* createTree(int val, int type, int nodetype, char* varname, tnode* l, tnod
     return temp;
 }
 
+/* Create an integer literal leaf node. */
 tnode* makeNumNode(int n) {
     return createTree(n, TYPE_INT, NODE_NUM, NULL, NULL, NULL, NULL);
 }
 
+/* Create a string literal leaf node. */
 tnode* makeStrNode(char *s) {
     return createTree(0, TYPE_STR, NODE_STR, s, NULL, NULL, NULL); // we put s into varname field as first arg (int val) is int
 }
 
+/* Map operator text to an AST kind, validate operand types, and assign result type. */
 tnode* makeOperatorNode(char* op, tnode* l, tnode* r) {
     int nodetype;
     int type;
@@ -475,6 +517,11 @@ tnode* makeOperatorNode(char* op, tnode* l, tnode* r) {
     return createTree(0, type, nodetype, NULL, l, NULL, r);
 }
 
+/*
+ * Resolve an identifier and attach its local/global symbol entry.
+ * Input: source name. Return: typed NODE_ID or compilation error.
+ * Local lookup runs first, so a local declaration shadows a same-named global.
+ */
 tnode* makeIdNode(char* name) {
     Lsymbol *localEntry = LLookup(name);
     Gsymbol *globalEntry;
@@ -502,6 +549,7 @@ tnode* makeIdNode(char* name) {
     return node;
 }
 
+/* Resolve a tuple field and store its type and word offset in the AST node. */
 tnode* makeFieldNode(char *tupleName, char *fieldName) {
     tnode *base = makeIdNode(tupleName);
     TupleType *tuple = FindTupleByType(base->type);
@@ -521,6 +569,7 @@ tnode* makeFieldNode(char *tupleName, char *fieldName) {
     exit(1);
 }
 
+/* Check l-value/RHS type equality and build NODE_ASSIGN for later codegen. */
 tnode* makeAssignNode(tnode* id, tnode* expr) {
     if (id->type != expr->type) { // u can only assign an int/str (a = <bool> is gay)
         // eg: a = 5 > 3
@@ -532,6 +581,7 @@ tnode* makeAssignNode(tnode* id, tnode* expr) {
     return createTree(0, TYPE_INT, NODE_ASSIGN, NULL, id, NULL, expr);
 }
 
+/* Build an input statement; whole tuples cannot be read directly. */
 tnode* makeReadNode(tnode* id) {
     if (FindTupleByType(id->type) != NULL) {
         fprintf(stderr, "Error: read() requires a tuple field, not a whole tuple\n");
@@ -540,6 +590,7 @@ tnode* makeReadNode(tnode* id) {
     return createTree(0, TYPE_INT, NODE_READ, NULL, id, NULL, NULL);
 }
 
+/* Build an output statement; whole tuples cannot be written directly. */
 tnode* makeWriteNode(tnode* expr) {
     if (FindTupleByType(expr->type) != NULL) {
         fprintf(stderr, "Error: write() expects an int or str expression, not a tuple\n");
@@ -548,10 +599,12 @@ tnode* makeWriteNode(tnode* expr) {
     return createTree(0, TYPE_INT, NODE_WRITE, NULL, expr, NULL, NULL);
 }
 
+/* Join two sequential statements into one AST chain node. */
 tnode* makeConnectorNode(tnode* l, tnode* r) {
     return createTree(0, TYPE_INT, NODE_CONNECTOR, NULL, l, NULL, r);
 }
 
+/* Require a boolean condition and build an if/optional-else AST node. */
 tnode* makeIfNode(tnode* cond, tnode* thenStmt, tnode* elseStmt) {
     if (cond->type != TYPE_BOOL) {
         fprintf(stderr, "Type mismatch\n"); // if (a + b) ❌ --- if (a < b) ✅
@@ -561,6 +614,7 @@ tnode* makeIfNode(tnode* cond, tnode* thenStmt, tnode* elseStmt) {
     return createTree(0, TYPE_BOOL, NODE_IF, NULL, cond, thenStmt, elseStmt);
 }
 
+/* Require a boolean condition and build a while-loop AST node. */
 tnode* makeWhileNode(tnode* cond, tnode* body) {
     if (cond->type != TYPE_BOOL) {
         fprintf(stderr, "Type mismatch\n");
@@ -570,22 +624,27 @@ tnode* makeWhileNode(tnode* cond, tnode* body) {
     return createTree(0, TYPE_BOOL, NODE_WHILE, NULL, cond, NULL, body);
 }
 
+/* Create a break node; codegen resolves it against the active loop stack. */
 tnode* makeBreakNode() {
     return createTree(0, TYPE_INT, NODE_BREAK, NULL, NULL, NULL, NULL);
 }
 
+/* Create a continue node; codegen resolves it against the active loop stack. */
 tnode* makeContinueNode() {
     return createTree(0, TYPE_INT, NODE_CONTINUE, NULL, NULL, NULL, NULL);
 }
 
+/* Build a repeat-until node with its condition and body in codegen's expected slots. */
 tnode* makeRepeatNode(tnode* body, tnode* cond) {
     return createTree(0, TYPE_BOOL, NODE_REPEAT, NULL, cond, NULL, body);
 }
 
+/* Build a do-while node with its condition and body in codegen's expected slots. */
 tnode* makeDoWhileNode(tnode* body, tnode* cond) {
     return createTree(0, TYPE_BOOL, NODE_DOWHILE, NULL, cond, NULL, body);
 }
 
+/* Build NODE_RETURN after checking the expression has a supported returnable type. */
 tnode* makeReturnNode(tnode *expr) {
     if (expr->type != TYPE_INT && expr->type != TYPE_STR &&
         expr->type != TYPE_INT_PTR && expr->type != TYPE_STR_PTR) {
@@ -595,11 +654,13 @@ tnode* makeReturnNode(tnode *expr) {
     return createTree(0, expr->type, NODE_RETURN, NULL, expr, NULL, NULL);
 }
 
+/* Keep function statements and the required final return in a NODE_BODY. */
 tnode* makeBodyNode(tnode *statements, tnode *returnNode) {
     return createTree(0, returnNode->type, NODE_BODY, NULL,
                       statements, NULL, returnNode);
 }
 
+/* Compare the parsed body's return type with the declared function return type. */
 tnode* finalizeBodyNode(tnode *body, int returnType, char *functionName) {
     if (body->type != returnType) {
         fprintf(stderr, "Error: return type of function '%s' does not match its declaration\n",
@@ -609,10 +670,12 @@ tnode* finalizeBodyNode(tnode *body, int returnType, char *functionName) {
     return body;
 }
 
+/* Create one argument-list cell: expression in left, next argument in right. */
 tnode* makeArgListNode(tnode *expr) {
     return createTree(0, expr->type, NODE_ARG_LIST, NULL, expr, NULL, NULL);
 }
 
+/* Append an argument to the tail, preserving source order for signature checking. */
 tnode* appendArgNode(tnode *arglist, tnode *expr) {
     tnode *tail = arglist;
     tnode *newArg = makeArgListNode(expr);
@@ -624,6 +687,12 @@ tnode* appendArgNode(tnode *arglist, tnode *expr) {
     return arglist;
 }
 
+/*
+ * Validate a function call against its global signature and build NODE_FUNCTION.
+ * Inputs: callee name and linked actual expressions. Return: typed call node.
+ * Checks callee kind, each argument type, and argument count. Called by E's
+ * ID(args) rules; codeGen later uses the attached Gentry and arglist.
+ */
 tnode* makeFunctionCallNode(char *name, tnode *arglist) {
     Gsymbol *function = Lookup(name);
     Paramstruct *formal;
@@ -674,6 +743,7 @@ tnode* makeFunctionCallNode(char *name, tnode *arglist) {
 //      |            |
 //    NUM(0)       NUM(1)
 
+/* Resolve a 1D global array access and check integer index and literal bounds. */
 tnode* makeArrayNode(char* name, tnode* index) { // index is an expression E 
     if (LLookup(name) != NULL) {
         fprintf(stderr, "Error: local variable '%s' is not an array\n", name);
@@ -705,6 +775,7 @@ tnode* makeArrayNode(char* name, tnode* index) { // index is an expression E
     return node;
 }
 
+/* Resolve a 2D global array access and require integer row/column expressions. */
 tnode* makeArray2DNode(char *name, tnode *rowIndex, tnode *colIndex) {
 	if (LLookup(name) != NULL) {
 		fprintf(stderr, "Error: local variable '%s' is not an array\n", name);

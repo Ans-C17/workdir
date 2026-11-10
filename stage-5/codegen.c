@@ -16,6 +16,13 @@ static int generatingMain;
 static int currentLocalCount;
 
 /* R19 is reserved for library-call scratch values. */
+/*
+ * FUNCTION: getReg
+ * PURPOSE: Allocate the next temporary XSM register.
+ * INPUT: none. RETURN: register number, or exits when the pool is exhausted.
+ * FLOW: increments global reg; R19 stays reserved for runtime scratch use.
+ * Change this with freeReg() if the register pool or scratch convention changes.
+ */
 int getReg(void) {
     if (reg >= 18) {
         fprintf(stderr, "Out of registers\n");
@@ -24,26 +31,43 @@ int getReg(void) {
     return ++reg;
 }
 
+/*
+ * FUNCTION: freeReg
+ * PURPOSE: Release the most recently allocated temporary register.
+ * INPUT/RETURN: none. FLOW: decrements reg when one is allocated.
+ * This is a compile-time allocator only; it emits no instruction. Keep
+ * allocations/releases balanced in every codeGen branch.
+ */
 void freeReg(void) {
     if (reg >= 0) {
         --reg;
     }
 }
 
+/* Return the next unique numeric suffix for an emitted control-flow label. */
 int getLabel(void) {
     return label++;
 }
 
+/* Save the active loop's destinations so nested break/continue target this loop. */
 static void pushLoop(int breakLabel, int continueLabel) {
     loopBreak[++loopTop] = breakLabel;
     loopContinue[loopTop] = continueLabel;
 }
 
+/* Remove the loop destinations after code for that loop has been emitted. */
 static void popLoop(void) {
     --loopTop;
 }
 
 /* An Lentry uses BP-relative storage; otherwise the variable is global. */
+/*
+ * FUNCTION: idAddress
+ * PURPOSE: Put a variable's address into a newly allocated register.
+ * INPUT: resolved NODE_ID with either Lentry or Gentry. RETURN: address register.
+ * FLOW: locals/parameters use BP + relative binding; globals use absolute binding.
+ * Address calculation changes here if the activation-record layout changes.
+ */
 static int idAddress(tnode *t) {
     int addressReg = getReg();
 
@@ -56,6 +80,7 @@ static int idAddress(tnode *t) {
     return addressReg;
 }
 
+/* Add the field offset stored in t->val to the containing tuple's base address. */
 static int fieldAddress(tnode *t) {
     int addressReg = idAddress(t->left);
 
@@ -63,10 +88,12 @@ static int fieldAddress(tnode *t) {
     return addressReg;
 }
 
+/* Test whether a type ID belongs to the tuple-value range. */
 static int isTupleType(int type) {
     return type >= TYPE_TUPLE_BASE && type < TYPE_TUPLE_PTR_BASE;
 }
 
+/* Return the base address of a direct tuple or a dereferenced tuple pointer. */
 static int tupleAddress(tnode *t) {
     if (t->nodetype == NODE_ID) {
         return idAddress(t);
@@ -79,6 +106,7 @@ static int tupleAddress(tnode *t) {
 }
 
 /* Whole tuples are stored as consecutive field words. */
+/* Copy a tuple word by word; R19 is scratch so both base-address registers survive. */
 static void copyTuple(tnode *destination, tnode *source) {
     int destinationReg;
     int sourceReg;
@@ -99,6 +127,7 @@ static void copyTuple(tnode *destination, tnode *source) {
     freeReg();
 }
 
+/* Compute global 1D array address base + evaluated index. */
 static int arrayAddress(tnode *t) {
     int indexReg = codeGen(t->left);
     int baseReg = getReg();
@@ -109,6 +138,7 @@ static int arrayAddress(tnode *t) {
     return indexReg;
 }
 
+/* Compute global 2D row-major address base + row*cols + column. */
 static int array2Address(tnode *t) {
     int rowReg = codeGen(t->left);
     int colReg = codeGen(t->middle);
@@ -127,12 +157,18 @@ static int array2Address(tnode *t) {
     return rowReg;
 }
 
+/* Emit the XSM Exit runtime call used when execution reaches main's return. */
 static void emitExit(void) {
     fprintf(targetFile, "MOV R19, \"Exit\"\n");
     fprintf(targetFile, "PUSH R19\nPUSH R19\nPUSH R19\nPUSH R19\nPUSH R19\n");
     fprintf(targetFile, "CALL 0\n");
 }
 
+/*
+ * Emit the Read runtime protocol for an l-value AST. Computes its address,
+ * pushes the five library arguments, calls address 0, and removes those words.
+ * Extend the address selection here when the language adds a new l-value kind.
+ */
 static void emitRead(tnode *variable) {
     int addressReg;
 
@@ -155,6 +191,11 @@ static void emitRead(tnode *variable) {
     freeReg();
 }
 
+/*
+ * Recursively push call arguments in reverse source order. The first formal
+ * must land at BP-3. Each expression is generated then its temporary is freed.
+ * Change this together with BeginFunctionScope() if argument layout changes.
+ */
 static void pushArgs(tnode *arguments) {
     int valueReg;
 
@@ -168,6 +209,7 @@ static void pushArgs(tnode *arguments) {
     freeReg();
 }
 
+/* Count argument-list cells so the caller can discard their stack words. */
 static int argCount(tnode *arguments) {
     int count = 0;
 
@@ -178,6 +220,14 @@ static int argCount(tnode *arguments) {
     return count;
 }
 
+/*
+ * FUNCTION: functionCall
+ * PURPOSE: Emit the caller side of NODE_FUNCTION and return its result register.
+ * INPUT: typed call node with Gentry/flabel and arglist. RETURN: allocated result register.
+ * FLOW: save live regs; push reversed args and result slot; CALL F<label>; pop
+ * result; discard args; restore saved regs. Callee setup/return is in prologue()
+ * and NODE_RETURN. Keep both sides synchronized when changing the stack ABI.
+ */
 static int functionCall(tnode *t) {
     int savedTop = reg;
     int arguments = argCount(t->arglist);
@@ -204,6 +254,7 @@ static int functionCall(tnode *t) {
     return resultReg;
 }
 
+/* Generate two operands, emit one binary instruction, and leave result in leftReg. */
 static void binary(tnode *t, const char *instruction) {
     int leftReg = codeGen(t->left);
     int rightReg = codeGen(t->right);
@@ -212,6 +263,13 @@ static void binary(tnode *t, const char *instruction) {
     freeReg();
 }
 
+/*
+ * FUNCTION: codeGen
+ * PURPOSE: Generate XSM code for an AST node.
+ * INPUT: AST node.
+ * RETURN: Register number containing the result, or -1 if it is a statement.
+ * FLOW: Handles each type of AST node and generates the corresponding XSM instructions.
+ */
 int codeGen(tnode *t) {
     int resultReg;
     int addressReg;
@@ -391,6 +449,7 @@ int codeGen(tnode *t) {
     case NODE_BODY:
         codeGen(t->left);
         return codeGen(t->right);
+    /* Callee epilogue: place result at BP-2, pop locals and saved BP, RET. */
 
     case NODE_RETURN:
         resultReg = codeGen(t->left);
@@ -412,6 +471,16 @@ int codeGen(tnode *t) {
     return -1;
 }
 
+/*
+ * FUNCTION: prologue
+ * PURPOSE: Set up the function's stack frame.
+ * INPUT: Number of local variables.
+ * RETURN: Nothing.
+ * FLOW:
+ *   1. Save the caller's BP.
+ *   2. Set BP to the current SP.
+ *   3. Allocate space for the function's local variables.
+ */
 static void prologue(int localCount) {
     int i;
 
@@ -421,6 +490,18 @@ static void prologue(int localCount) {
     }
 }
 
+/*
+ * FUNCTION: generateProgram
+ * PURPOSE: Generate the complete XSM program.
+ * INPUT: The linked list containing all function ASTs.
+ * RETURN: Nothing. Writes the generated code to targetFile.
+ * FLOW:
+ *   1. Write the XSM program header and initialize SP.
+ *   2. Loop through all functions in the list.
+ *   3. Print each function's label (MAIN or F0, F1, etc.).
+ *   4. Set up space for its local variables.
+ *   5. Call codeGen() to generate its instructions.
+ */
 void generateProgram(FunctionAST *functions) {
     FunctionAST *function;
 

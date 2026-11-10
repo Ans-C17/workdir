@@ -88,6 +88,8 @@ int nextFunctionLabel = 0;
 // if it is partially matched it shifts to next state, expecting another token
 // if it matches a complete grammar rule, it reduces it into the non terminal on the left
 // runs the yacc code block, and continues on with the reduced state
+
+/* Globals/signatures precede definitions so recursive and forward calls can be checked. */
 Program : GDeclBlock FDefBlock MainBlock { $$ = $3; }
         | GDeclBlock MainBlock           { $$ = $2; }
         | MainBlock                      { $$ = $1; };
@@ -96,6 +98,7 @@ GDeclBlock : DECL GDeclList ENDDECL | DECL ENDDECL;
 
 GDeclList : GDeclList GDecl | GDecl;
 
+/* Install each declared global; VarList marks function signatures separately from storage objects. */
 GDecl : Type VarList SEMICOLON {
     // if i have like 
     // int a, b;
@@ -352,6 +355,7 @@ TupleVarList : TupleVarList ',' ID {
 
 // n â†’ makeIdNode("n")
 // arr[i] â†’ makeArrayNode("arr", AST of i)
+/* Build l-value ASTs for identifiers, arrays, tuple fields, and pointer dereferences. */
 Variable : ID {
         $$ = makeIdNode($1);
     }
@@ -371,6 +375,7 @@ Variable : ID {
 
 FDefBlock : FDefBlock FDef | FDef;
 
+/* Validate signature, open scope, parse body, save AST, then end local lookup. */
 FDef : FType ID'('ParamList')' {
         CheckFunctionDefinition($2, $1, $4);
         BeginFunctionScope($4);
@@ -380,6 +385,7 @@ FDef : FType ID'('ParamList')' {
         EndFunctionScope();
     };
 
+/* Collect formal parameters in source order; NULL represents an empty parameter list. */
 ParamList : ParamList ',' Param {
         Paramstruct *temp = $1;
 
@@ -420,6 +426,7 @@ LdeclBlock : DECL LDecList ENDDECL | DECL ENDDECL;
 
 LDecList : LDecList LDecl | LDecl;
 
+/* Install locals while this function scope is active; their bindings are relative to BP. */
 LDecl : Type IdList SEMICOLON {
         InstallLocalVariables($2, $1);
     }
@@ -474,16 +481,19 @@ IdList : IdList ',' ID {
     };
 
 // Each argument-list node holds one expression in left and the next argument in right.
+/* Build actual arguments in source order for signature checking; codegen pushes them in reverse. */
 ArgList : ArgList ',' E { $$ = appendArgNode($1, $3); }
         | E             { $$ = makeArgListNode($1); };
 
 /* A function body must end with exactly one return statement. */
+/* Separate statements from the required final return so NODE_BODY codegen emits both in order. */
 Body : T_BEGIN Slist ReturnStmt T_END { $$ = makeBodyNode($2, $3); }
      | T_BEGIN ReturnStmt T_END       { $$ = makeBodyNode(NULL, $2); };
 
 ReturnStmt : RETURN E SEMICOLON { $$ = makeReturnNode($2); };
 
 /* main is a function with no parameters and an int return type. */
+/* Stage 5 main gets a local scope and int return; legacy Stage 4 main forms remain accepted. */
 MainBlock : INT MAIN '(' ')' '{' {
         BeginFunctionScope(NULL);
     } LdeclBlock Body '}' {
@@ -589,6 +599,7 @@ DoWhileStmt : DO Slist WHILE '(' E ')' SEMICOLON {
         $$ = makeDoWhileNode($2, $5);
     };
     
+/* Expressions build typed ASTs; the final ID(args) alternatives create function-call expressions. */
 E : E PLUS E {
         $$ = makeOperatorNode("+", $1, $3);
     }
@@ -655,6 +666,7 @@ E : E PLUS E {
 
 %%
 
+/* Parse input, print semantic tables, then generate the saved function ASTs. */
 extern FILE* yyin; // it is file pointer of lexer. defaulted to "stdin"
 int main(int argc, char* argv[]) {
     if (argc < 2) {

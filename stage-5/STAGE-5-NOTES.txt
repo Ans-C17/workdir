@@ -1,0 +1,115 @@
+STAGE 5 - FUNCTIONS, SCOPE, RECURSION
+====================================
+
+This note covers the Stage 5 work in this folder: global function signatures,
+function definitions, local scope, call checking, activation records, and
+recursive calls. This folder also has pointer and tuple extensions; see the
+last section. The source comments are the first place to look while tracing
+individual functions and grammar actions.
+
+
+PROGRAM FLOW
+------------
+
+1. exprtree.l returns tokens. exprtree.y parses global declarations first.
+   GDecl calls Install() for each global variable and declared function.
+   A function's Gsymbol stores its return type, formal Paramstruct list, and
+   F label. A variable instead receives a global memory binding.
+
+2. FDef begins by calling CheckFunctionDefinition(). It requires a matching
+   global function declaration: return type and each parameter's name, type,
+   and position must agree. BeginFunctionScope() then creates a fresh local
+   lookup table and adds the parameters.
+
+3. LDecl adds function locals. Parameters use negative BP offsets, beginning
+   at -3; locals use positive offsets, beginning at +1. While parsing the
+   function body, Variable creates identifier/array/field/dereference nodes.
+   makeIdNode() searches locals first and globals second, so local names hide
+   global names.
+
+4. E productions create typed expression trees. For ID(args), ArgList builds
+   a linked list of argument expressions and makeFunctionCallNode() checks
+   the callee, argument count, and each argument type. The resulting call node
+   points to the global function entry and keeps the argument list.
+
+5. Body requires one final return statement. finalizeBodyNode() checks its
+   type against the declared return type. SaveFunctionAST() retains the body
+   tree and local entries for code generation; EndFunctionScope() clears the
+   active name lookup for the next function.
+
+6. The parser calls generateProgram(). It emits a prologue and runs codeGen()
+   for every saved function tree. The label translator later replaces F and
+   jump labels with addresses.
+
+
+CALLING CONVENTION / WHY RECURSION WORKS
+----------------------------------------
+
+Caller: functionCall() saves registers currently in use; pushArgs() evaluates
+and pushes actual arguments in reverse order; then a return-value slot is
+pushed and CALL F<n> transfers control. On return, functionCall() collects
+the result, removes argument words, and restores the saved registers.
+
+Callee: prologue() pushes the caller's BP, sets BP to the current SP, then
+reserves local words. NODE_RETURN stores the result at BP-2, removes local
+words, restores the old BP, and executes RET. CALL has saved the return
+instruction address for RET to use.
+
+Frame offsets used by this code:
+
+    BP-2    caller-reserved return value
+    BP-3    first argument
+    BP-4    second argument (further arguments continue downward)
+    BP      saved caller BP
+    BP+1    first local (further locals continue upward)
+
+Each recursive call repeats this convention and receives a new frame. The
+same function code can therefore run with different argument/local values.
+When changing offsets, keep BeginFunctionScope(), InstallLocalVariables(),
+pushArgs(), functionCall(), prologue(), idAddress(), and NODE_RETURN aligned.
+
+
+KEY CHANGE PATHS
+----------------
+
+Function declaration or signature checks:
+    exprtree.y: GDecl and ParamList/Param
+    exprtree.c: Install and CheckFunctionDefinition
+    exprtree.h: Gsymbol and Paramstruct
+
+Local variable scope and name resolution:
+    exprtree.y: FDef and LDecl
+    exprtree.c: BeginFunctionScope, InstallLocalVariables, EndFunctionScope,
+                LLookup, makeIdNode, SaveFunctionAST
+    exprtree.h: Lsymbol and FunctionAST
+    codegen.c: prologue and idAddress
+
+Call syntax, type checking, and emitted call sequence:
+    exprtree.y: ArgList and ID(args) alternatives in E
+    exprtree.c: makeArgListNode, appendArgNode, makeFunctionCallNode
+    exprtree.h: tnode.arglist and NODE_FUNCTION
+    codegen.c: pushArgs, argCount, functionCall, NODE_FUNCTION case
+
+Return type and stack cleanup:
+    exprtree.y: Body and ReturnStmt
+    exprtree.c: makeReturnNode and finalizeBodyNode
+    codegen.c: NODE_RETURN case, prologue, functionCall
+
+When introducing a new AST operation, update its node kind/fields in
+exprtree.h, grammar action in exprtree.y, semantic constructor/check in
+exprtree.c, and codeGen() case in codegen.c.
+
+
+EXTRA FEATURES PRESENT IN THIS FOLDER
+-------------------------------------
+
+Pointer support allows pointer parameters, address-of, and dereference.
+Relevant paths are Param in exprtree.y; makeAddressNode() and
+makeDereferenceNode() in exprtree.c; NODE_ADDRESS/NODE_DEREFERENCE and the
+assignment l-value handling in codegen.c.
+
+Tuple support adds tuple type/field tables, field access, and whole-tuple copy.
+Relevant paths are tuple productions in exprtree.y; TupleType/Field structures
+in exprtree.h; InstallTupleType(), makeFieldNode(), and TypeSize() in exprtree.c;
+fieldAddress(), tupleAddress(), and copyTuple() in codegen.c. These are beyond
+the core function/recursion objectives in the Stage 5 handout.
