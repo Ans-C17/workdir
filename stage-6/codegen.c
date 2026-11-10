@@ -95,15 +95,16 @@ static int array2Address(tnode *t) {
     return rowReg;
 }
 
-/* Return the address of a variable, array element, dereference, or field. */
 /*
  * FUNCTION: lvalueAddress
  * PURPOSE: Find where an assignable variable or field is stored.
  * INPUT: AST node for a variable, array element, dereference, or field.
- * RETURN: Register holding its address.
- * FLOW: Compute the base address, follow a user-defined variable's stored
- * pointer for each field, then add that field's index. Update this when adding
- * a new kind of assignable expression.
+ * RETURN: Register holding the memory address; the register remains in use.
+ * FLOW: Find the base address. For each NODE_FIELD, load the object's pointer
+ * from that slot and add Fentry->fieldIndex. Assignment, read, and alloc use
+ * this function to find their destination.
+ * MODIFICATION HINT: If a new kind of assignable target is added, handle it
+ * in this switch and check its read and write code-generation paths.
  */
 static int lvalueAddress(tnode *t) {
     int addressReg;
@@ -135,16 +136,26 @@ static void emitExit(void) {
     fprintf(targetFile, "CALL 0\n");
 }
 
-/* Keep allocator code in the generated program.  R19 is outside the
- * expression register allocator; save the live expression registers before
- * using R1-R5 as allocator temporaries. */
-/* Save live expression registers before allocator code uses R1-R5. */
+/*
+ * FUNCTION: saveRegsThrough
+ * PURPOSE: Protect values that heap instructions are about to overwrite.
+ * INPUT: Highest live expression-register number.
+ * RETURN: Nothing. Writes PUSH instructions to targetFile.
+ * FLOW: Push R0 through lastReg in order. restoreRegsThrough() must pop them
+ * in reverse order after the allocator work is complete.
+ */
 static void saveRegsThrough(int lastReg) {
     int i;
     for (i = 0; i <= lastReg; ++i) fprintf(targetFile, "PUSH R%d\n", i);
 }
 
-/* Restore live expression registers after allocator code finishes. */
+/*
+ * FUNCTION: restoreRegsThrough
+ * PURPOSE: Restore expression values saved before heap instructions ran.
+ * INPUT: Highest saved register number.
+ * RETURN: Nothing. Writes POP instructions to targetFile.
+ * FLOW: Pop lastReg down to R0, reversing saveRegsThrough()'s push order.
+ */
 static void restoreRegsThrough(int lastReg) {
     int i;
     for (i = lastReg; i >= 0; --i) fprintf(targetFile, "POP R%d\n", i);
@@ -152,10 +163,14 @@ static void restoreRegsThrough(int lastReg) {
 
 /*
  * FUNCTION: emitHeapInit
- * PURPOSE: Generate instructions that build the free-block list in addresses
- * 1032 through 2040 and store its first block at address 1024.
- * INPUT/RETURN: None. Writes initialization instructions to targetFile.
- * FLOW: Link blocks eight words apart; mark the final link -1; set the head.
+ * PURPOSE: Generate startup instructions that prepare the Stage 6 heap.
+ * INPUT: None.
+ * RETURN: Nothing. Writes instructions to targetFile.
+ * FLOW: Link eight-word blocks from 1032 through 2040, mark the last link -1,
+ * then put the first block address at 1024. generateProgram() calls this once
+ * before MAIN can allocate an object.
+ * MODIFICATION HINT: If heap range or block size changes, update this function,
+ * emitAlloc(), and emitFree() together.
  */
 static void emitHeapInit(void) {
     int loop = getLabel();
@@ -173,10 +188,13 @@ static void emitHeapInit(void) {
 /*
  * FUNCTION: emitAlloc
  * PURPOSE: Generate instructions to take one block from the free list.
- * INPUT: Result register, highest live register, and type size in words.
+ * INPUT: Result register, highest live register, and requested type size.
  * RETURN: None. Generated code puts the block address in resultReg, or -1
  * when size is invalid or no blocks remain.
- * FLOW: Save live registers; check size; remove the head block; restore registers.
+ * FLOW: Save live registers; reject sizes outside 1..8; remove the free-list
+ * head; place its address in resultReg; restore the saved registers. Returns
+ * -1 in resultReg if size is invalid or the list is empty.
+ * CALLED BY: The NODE_ALLOC case in codeGen().
  */
 static void emitAlloc(int resultReg, int savedTop, int size) {
     int bad = getLabel();
@@ -199,8 +217,12 @@ static void emitAlloc(int resultReg, int savedTop, int size) {
  * PURPOSE: Generate instructions to return an allocated block to the free list.
  * INPUT: Register holding the block address and highest live register.
  * RETURN: None. Invalid, misaligned, or already-free addresses are ignored.
- * FLOW: Save live registers; validate and search the free list; clear the block;
- * link it at the head; restore registers. Keep this consistent with emitAlloc().
+ * FLOW: Save live registers; check the address range and 8-word alignment;
+ * reject a block already in the free list; clear its eight words; link it at
+ * the list head; restore registers. Invalid addresses are ignored.
+ * CALLED BY: The NODE_FREE case in codeGen(). The source variable is not reset.
+ * MODIFICATION HINT: Keep validation and block layout consistent with
+ * emitHeapInit() and emitAlloc().
  */
 static void emitFree(int pointerReg, int savedTop) {
     int bad = getLabel();
@@ -294,10 +316,13 @@ static void binary(tnode *t, const char *instruction) {
 /*
  * FUNCTION: codeGen
  * PURPOSE: Generate XSM instructions for one AST node and its children.
- * INPUT: AST node. RETURN: Result register, or -1 for a statement.
- * FLOW: Handle the node type; for Stage 6, NODE_FIELD finds a field's memory,
- * NODE_ALLOC writes a heap-block address into its variable, and NODE_FREE
- * returns that block. Add matching cases here for new AST features.
+ * INPUT: AST node to translate.
+ * RETURN: Register holding an expression result, or -1 for a statement.
+ * FLOW: Select the instruction sequence from nodetype and recursively generate
+ * child expressions/statements. Stage 6 NODE_FIELD reads a heap field;
+ * NODE_ALLOC stores a newly allocated block address; NODE_FREE returns a block.
+ * MODIFICATION HINT: For a new AST node, add its case here and update its
+ * constructor/type checks in exprtree.c and its grammar action in exprtree.y.
  */
 int codeGen(tnode *t) {
     int resultReg;
@@ -338,7 +363,11 @@ int codeGen(tnode *t) {
         fprintf(targetFile, "MOV R%d, [R%d]\n", resultReg, resultReg);
         return resultReg;
 
-    /* A user-defined variable stores a pointer; follow it before reading field data. */
+    /*
+     * A NODE_FIELD read uses lvalueAddress() to find its heap word, then loads
+     * the value stored in that word. The same address helper is used for
+     * assignment and read targets in this file.
+     */
     case NODE_FIELD:
         resultReg = lvalueAddress(t);
         fprintf(targetFile, "MOV R%d, [R%d]\n", resultReg, resultReg);
@@ -387,7 +416,10 @@ int codeGen(tnode *t) {
         freeReg();
         return -1;
 
-    /* Allocate a block sized for the target type, then save its address in the target. */
+    /*
+     * Ask the heap for enough words for this type, then store the returned
+     * address in the target variable/field. A -1 result means allocation failed.
+     */
     case NODE_ALLOC:
         resultReg = getReg();
         emitAlloc(resultReg, resultReg - 1, GetSize(t->left->typeEntry));
@@ -397,7 +429,7 @@ int codeGen(tnode *t) {
         freeReg();
         return -1;
 
-    /* Read the target's stored address and return that block to the free list. */
+    /* Read the target's stored heap address and return that block to the free list. */
     case NODE_FREE:
         resultReg = codeGen(t->left);
         emitFree(resultReg, reg);
@@ -519,8 +551,11 @@ static void prologue(int localCount) {
  * FUNCTION: generateProgram
  * PURPOSE: Generate the complete target program.
  * INPUT: Linked list of completed function ASTs. RETURN: Nothing; writes targetFile.
- * FLOW: Write header and stack setup; initialize the heap; jump to MAIN; then
- * emit each function label, stack frame, and body through codeGen().
+ * FLOW: Write header and stack setup; call emitHeapInit() to create the free
+ * list; jump over function bodies to MAIN; then emit each function label,
+ * stack frame, and body through codeGen().
+ * MODIFICATION HINT: If heap initialization or program startup changes, start
+ * here and in emitHeapInit().
  */
 void generateProgram(FunctionAST *functions) {
     FunctionAST *function;

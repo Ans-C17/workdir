@@ -7,9 +7,23 @@ int getReg();
 void freeReg();
 int getLabel();
 
-/* Generate XSM for an AST node; returns its result register or -1 for statements. */
+/*
+ * FUNCTION: codeGen
+ * PURPOSE: Generate XSM instructions for one AST node.
+ * INPUT: AST node to translate.
+ * RETURN: Register holding an expression result, or -1 for a statement.
+ * FLOW: Visit the node and its children; Stage 6 field/alloc/free cases use
+ * lvalueAddress() and the heap emitters in codegen.c.
+ */
 int codeGen(tnode *root);
-/* Emit startup code and all saved functions, including heap initialization. */
+/*
+ * FUNCTION: generateProgram
+ * PURPOSE: Write the complete XSM program to targetFile.
+ * INPUT: Linked list of saved function ASTs.
+ * RETURN: Nothing.
+ * FLOW: Write the header and stack start, initialize the Stage 6 heap, then
+ * emit MAIN and each function.
+ */
 void generateProgram(FunctionAST *functions);
 
 #endif

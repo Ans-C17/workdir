@@ -12,7 +12,15 @@ static Typetable *Thead = NULL;
 static Typetable *Ttail = NULL;
 static Typetable *TcurrentDefinition = NULL;
 
-/* Create one type-table row and add it to the end of the type list. */
+/*
+ * FUNCTION: CreateTypeEntry
+ * PURPOSE: Add one named type to the end of the type table.
+ * INPUT: Type name and number of words used by the type.
+ * RETURN: The new type entry, or NULL if memory allocation fails.
+ * FLOW: Allocate and fill an entry, then link it after the current table tail.
+ * This is used by TypeTableCreate() for built-in types and TInstall() for
+ * user-defined types.
+ */
 static Typetable *CreateTypeEntry(const char *name, int size) {
     Typetable *entry = calloc(1, sizeof(Typetable));
     if (entry == NULL) return NULL;
@@ -30,7 +38,15 @@ static Typetable *CreateTypeEntry(const char *name, int size) {
     return entry;
 }
 
-/* Add the built-in types (int, str, bool, void, null, and primitive pointers). */
+/*
+ * FUNCTION: TypeTableCreate
+ * PURPOSE: Create the built-in type entries needed by the compiler.
+ * INPUT: None.
+ * RETURN: Nothing. Stops compilation if the table cannot be created.
+ * FLOW: Add int, str, bool, void, null, int_ptr, and str_ptr once, before
+ * yyparse() reads declarations. User-defined entries are added later by
+ * TBeginDefinition().
+ */
 void TypeTableCreate(void) {
     /* Safe to call more than once; preserve user entries if already initialized. */
     if (Thead != NULL) return;
@@ -47,7 +63,14 @@ void TypeTableCreate(void) {
     }
 }
 
-/* Return the built-in pointer type for int/str; other pointer types are unsupported here. */
+/*
+ * FUNCTION: PointerType
+ * PURPOSE: Find the built-in pointer type that matches int or str.
+ * INPUT: The base type entry.
+ * RETURN: int_ptr or str_ptr; NULL for unsupported types.
+ * FLOW: Match the base type name against the two pointer types supported here.
+ * Update this function and TypeTableCreate() if more pointer types are added.
+ */
 Typetable *PointerType(Typetable *type) {
     if (type == NULL) return NULL;
     if (strcmp(type->name, "int") == 0) return TLookup("int_ptr");
@@ -55,7 +78,14 @@ Typetable *PointerType(Typetable *type) {
     return NULL;
 }
 
-/* Convert a built-in type-table entry to the older integer code used by AST operators. */
+/*
+ * FUNCTION: TypeCode
+ * PURPOSE: Convert a built-in type entry to the AST's small type code.
+ * INPUT: A type-table entry.
+ * RETURN: The matching TYPE_* value, or -1 for a user-defined type.
+ * FLOW: Compare the entry with built-in types. User-defined type identity is
+ * kept separately in each node's typeEntry pointer.
+ */
 int TypeCode(Typetable *type) {
     if (type == NULL) return -1;
     if (strcmp(type->name, "int") == 0) return TYPE_INT;
@@ -63,10 +93,10 @@ int TypeCode(Typetable *type) {
     if (strcmp(type->name, "bool") == 0) return TYPE_BOOL;
     if (strcmp(type->name, "int_ptr") == 0) return TYPE_INT_PTR;
     if (strcmp(type->name, "str_ptr") == 0) return TYPE_STR_PTR;
-    return -1; /* AST user-type identity is handled in a later step. */
+    return -1; /* User-defined identity is kept in the node's typeEntry pointer. */
 }
 
-/* Find the type-table row matching a built-in AST type code. */
+/* Find the built-in type entry used when createTree() receives a TYPE_* code. */
 static Typetable *TypeEntryForCode(int type) {
     switch (type) {
         case TYPE_INT: return TLookup("int");
@@ -78,7 +108,14 @@ static Typetable *TypeEntryForCode(int type) {
     }
 }
 
-/* Find a type-table row by its name. */
+/*
+ * FUNCTION: TLookup
+ * PURPOSE: Find a type entry by its name.
+ * INPUT: Type name.
+ * RETURN: Matching Typetable entry, or NULL if the name is not defined.
+ * FLOW: Search the linked type table from its first entry to its last.
+ * Used by grammar actions, declaration checks, and field/type validation.
+ */
 Typetable *TLookup(char *name) {
     Typetable *entry;
     if (name == NULL) return NULL;
@@ -90,9 +127,13 @@ Typetable *TLookup(char *name) {
 }
 
 /*
- * Add a type-table row and, when fields are supplied, check and attach them.
- * Returns the new type or NULL if its name/fields are invalid. TBeginDefinition
- * uses this to add an empty row before the grammar installs recursive fields.
+ * FUNCTION: TInstall
+ * PURPOSE: Add a type entry and attach a complete list of fields, if supplied.
+ * INPUT: Type name, type size, and optional linked list of fields.
+ * RETURN: New type entry, or NULL for a duplicate name or invalid field list.
+ * FLOW: Check that field types exist and field names are unique, assign each
+ * field its word index, then append the type to the table. TBeginDefinition()
+ * also uses this to add an empty entry before recursive fields are read.
  */
 Typetable *TInstall(char *name, int size, Fieldlist *fields) {
     Typetable *entry;
@@ -120,7 +161,15 @@ Typetable *TInstall(char *name, int size, Fieldlist *fields) {
     return entry;
 }
 
-/* Add an incomplete type first so its own fields can refer to it recursively. */
+/*
+ * FUNCTION: TBeginDefinition
+ * PURPOSE: Start a type definition before its fields have been read.
+ * INPUT: The new type name.
+ * RETURN: The incomplete type entry, or NULL if the name/state is invalid.
+ * FLOW: Add an empty type entry and mark it as the type currently being built.
+ * The grammar then calls FInstall() for each field and TFinishDefinition()
+ * after the closing brace. Adding the name first allows self-reference.
+ */
 Typetable *TBeginDefinition(char *name) {
     Typetable *entry;
     if (name == NULL || TLookup(name) != NULL || TcurrentDefinition != NULL) return NULL;
@@ -132,12 +181,19 @@ Typetable *TBeginDefinition(char *name) {
     return entry;
 }
 
-/* Return the type currently being filled by the type-definition grammar. */
+/* Return the type entry currently receiving fields from the parser. */
 Typetable *TCurrentDefinition(void) {
     return TcurrentDefinition;
 }
 
-/* Add one field to the type currently being defined, with its type and position. */
+/*
+ * FUNCTION: FInstall
+ * PURPOSE: Add one field to the type currently being defined.
+ * INPUT: Owner type, field name, field type, and field position.
+ * RETURN: The new field entry, or NULL if the field/type is invalid or repeated.
+ * FLOW: Check the owner and field type, reject duplicate names, then append a
+ * Fieldlist entry. Called by the FieldDecl grammar rule for each declaration.
+ */
 Fieldlist *FInstall(Typetable *owner, char *name, Typetable *fieldType, int fieldIndex) {
     Fieldlist *field;
     Fieldlist *tail;
@@ -168,7 +224,14 @@ Fieldlist *FInstall(Typetable *owner, char *name, Typetable *fieldType, int fiel
     return field;
 }
 
-/* Count the completed type's fields and clear the current-definition marker. */
+/*
+ * FUNCTION: TFinishDefinition
+ * PURPOSE: Mark a user-defined type as complete and record its field count.
+ * INPUT: The type entry being completed.
+ * RETURN: Nothing. Stops compilation if it is not the active definition.
+ * FLOW: Count the linked fields, store the count as the type size, and clear
+ * TcurrentDefinition. Called after the type's closing brace is parsed.
+ */
 void TFinishDefinition(Typetable *type) {
     Fieldlist *field;
     int size = 0;
@@ -181,7 +244,14 @@ void TFinishDefinition(Typetable *type) {
     TcurrentDefinition = NULL;
 }
 
-/* Find a named field inside a type. */
+/*
+ * FUNCTION: FLookup
+ * PURPOSE: Find a field by name inside one user-defined type.
+ * INPUT: Owner type and field name.
+ * RETURN: Matching Fieldlist entry, or NULL if the field is absent.
+ * FLOW: Search only that type's field list. makeFieldNode() uses this to check
+ * each part of an expression such as item.next.value.
+ */
 Fieldlist *FLookup(Typetable *type, char *name) {
     Fieldlist *field;
     if (type == NULL || name == NULL) return NULL;
@@ -192,12 +262,12 @@ Fieldlist *FLookup(Typetable *type, char *name) {
     return NULL;
 }
 
-/* Return the number of fields/words needed by a user-defined type. */
+/* Return a user-defined type's field count; alloc() uses it as the requested size. */
 int GetSize(Typetable *type) {
     return type == NULL ? 0 : type->size;
 }
 
-/* Tell whether this type is user-defined rather than one of the built-ins. */
+/* Return true for named user types and false for built-in types or NULL. */
 int IsUserDefinedType(Typetable *type) {
     return type != NULL &&
            type != TLookup("int") &&
@@ -209,7 +279,7 @@ int IsUserDefinedType(Typetable *type) {
            type != TLookup("str_ptr");
 }
 
-/* Print type sizes and each type's field names, positions, and types. */
+/* Print the type and field tables for checking the parser's Stage 6 results. */
 void PrintTypeTable(void) {
     Typetable *type;
 
@@ -535,6 +605,15 @@ tnode* makeDereferenceNode(tnode *ptr) { // EX2: creates an AST node for derefer
     return createTree(0, valueType, NODE_DEREFERENCE, NULL, ptr, NULL, NULL);
 }
 
+/*
+ * FUNCTION: createTree
+ * PURPOSE: Allocate and initialize one AST node.
+ * INPUT: Node value/type/kind/name and its three child pointers.
+ * RETURN: The new node.
+ * FLOW: Set all fields, including symbol/type links, to known values before
+ * returning. Stage 6 type constructors then set typeEntry to the exact named
+ * type, which is needed for assignment and field checks.
+ */
 tnode* createTree(int val, int type, int nodetype, char* varname, tnode* l, tnode* m, tnode* r) {
     tnode* temp = (tnode*)malloc(sizeof(tnode));
 
@@ -562,14 +641,30 @@ tnode* makeStrNode(char *s) {
     return createTree(0, TYPE_STR, NODE_STR, s, NULL, NULL, NULL); // we put s into varname field as first arg (int val) is int
 }
 
-/* Create the special NULL value; assignment may use it for any user-defined type. */
+/*
+ * FUNCTION: makeNullNode
+ * PURPOSE: Build the AST leaf for the ExpL NULL constant.
+ * INPUT: None.
+ * RETURN: A node with the built-in null type.
+ * FLOW: Save both the old TYPE_NULL code and the type-table entry. Assignment
+ * and equality checks use that entry to allow NULL with user-defined values.
+ */
 tnode* makeNullNode(void) {
     tnode *node = createTree(0, TYPE_NULL, NODE_NULL, NULL, NULL, NULL, NULL);
     node->typeEntry = TLookup("null");
     return node;
 }
 
-/* Check expression types; equality uses type-table identity, with NULL as the exception. */
+/*
+ * FUNCTION: makeOperatorNode
+ * PURPOSE: Build an operator node after checking its operand types.
+ * INPUT: Operator text and left/right expression nodes.
+ * RETURN: A typed AST node; stops compilation on a type mismatch.
+ * FLOW: Convert the operator to a node kind, check the operand types, and
+ * return a node with the result type. Equality uses exact type-entry identity;
+ * NULL may be compared with a user-defined type. Extend these checks when a
+ * new operator or type combination is added.
+ */
 tnode* makeOperatorNode(char* op, tnode* l, tnode* r) {
     int nodetype;
     int type;
@@ -659,6 +754,14 @@ tnode* makeOperatorNode(char* op, tnode* l, tnode* r) {
     return createTree(0, type, nodetype, NULL, l, NULL, r);
 }
 
+/*
+ * FUNCTION: makeIdNode
+ * PURPOSE: Build a variable node and attach its declared type and symbol entry.
+ * INPUT: Variable name.
+ * RETURN: A typed AST leaf; stops compilation if the name is invalid.
+ * FLOW: Search the current function's locals first, then globals. Save the
+ * exact Typetable pointer so later Stage 6 checks can distinguish named types.
+ */
 tnode* makeIdNode(char* name) {
     Lsymbol *localEntry = LLookup(name);
     Gsymbol *globalEntry;
@@ -688,16 +791,22 @@ tnode* makeIdNode(char* name) {
     return node;
 }
 
-/* Require matching named types, except NULL may be assigned to a user-defined variable. */
+/*
+ * FUNCTION: makeAssignNode
+ * PURPOSE: Build an assignment after checking that both sides have compatible types.
+ * INPUT: Destination variable/field node and right-side expression node.
+ * RETURN: Assignment AST node; stops compilation on a type mismatch.
+ * FLOW: Require the same Typetable entry on both sides. The only exception is
+ * NULL assigned to a user-defined variable. Field assignment reaches here
+ * through the Field grammar and uses the same rule as ordinary assignment.
+ */
 tnode* makeAssignNode(tnode* id, tnode* expr) {
     /* NULL is the only value allowed to differ from the destination's named type. */
-    // rhs null avanam + lhs null avaruth + lhs field indel athu null avaruth (field = null anel athu default type aan not user-defined)
     int nullToUserType = expr->typeEntry == TLookup("null") &&
                          IsUserDefinedType(id->typeEntry);
 
     if (id->typeEntry != expr->typeEntry && !nullToUserType) {
-        // eg: a = 5 > 3
-        // i.e id type and rhs type same avanam
+        /* Different named types cannot be assigned; NULL is handled above. */
         fprintf(stderr, "Type mismatch\n");
         exit(1);
     }
@@ -705,7 +814,15 @@ tnode* makeAssignNode(tnode* id, tnode* expr) {
     return createTree(0, TYPE_INT, NODE_ASSIGN, NULL, id, NULL, expr);
 }
 
-/* Check alloc() target and enforce the fixed allocator limit of 1 to 8 fields. */
+/*
+ * FUNCTION: makeAllocNode
+ * PURPOSE: Build an alloc() statement for a user-defined variable or field.
+ * INPUT: The AST node that will hold the allocated object's address.
+ * RETURN: NODE_ALLOC, or stops compilation for an invalid target/type size.
+ * FLOW: Require a user-defined type, check that its field count is 1 to 8,
+ * then record the requested type on the node. codeGen() later asks emitAlloc()
+ * for a heap block and stores the returned address in this target.
+ */
 tnode* makeAllocNode(tnode *target) {
     int size;
     tnode *node;
@@ -729,7 +846,14 @@ tnode* makeAllocNode(tnode *target) {
     return node;
 }
 
-/* Require free() to receive a variable or field of a user-defined type. */
+/*
+ * FUNCTION: makeFreeNode
+ * PURPOSE: Build a free() statement for a user-defined variable or field.
+ * INPUT: The AST node whose stored heap address should be released.
+ * RETURN: NODE_FREE, or stops compilation if the target is not user-defined.
+ * FLOW: Check the target type and create the node. codeGen() reads the stored
+ * address and emits the instructions that return its block to the free list.
+ */
 tnode* makeFreeNode(tnode *target) {
     tnode *node;
 
@@ -789,6 +913,14 @@ tnode* makeDoWhileNode(tnode* body, tnode* cond) {
     return createTree(0, TYPE_BOOL, NODE_DOWHILE, NULL, cond, NULL, body);
 }
 
+/*
+ * FUNCTION: makeReturnNode
+ * PURPOSE: Build a function return node and reject unsupported return values.
+ * INPUT: Return expression AST.
+ * RETURN: NODE_RETURN carrying the expression's exact type entry.
+ * FLOW: Reject bool, void, NULL, or missing type entries, then copy the
+ * expression type. finalizeBodyNode() later compares it with the declaration.
+ */
 tnode* makeReturnNode(tnode *expr) {
     if (expr->typeEntry == NULL || expr->typeEntry == TLookup("bool") ||
         expr->typeEntry == TLookup("void") || expr->typeEntry == TLookup("null")) {
@@ -807,6 +939,14 @@ tnode* makeBodyNode(tnode *statements, tnode *returnNode) {
     return node;
 }
 
+/*
+ * FUNCTION: finalizeBodyNode
+ * PURPOSE: Check a function body's return type against its declaration.
+ * INPUT: Body AST, declared return type, and function name for the error.
+ * RETURN: The same body node when its exact named type matches.
+ * FLOW: Compare type-table entry pointers; reject a mismatch before code
+ * generation. Called by the function and main grammar actions.
+ */
 tnode* finalizeBodyNode(tnode *body, Typetable *returnType, char *functionName) {
     if (body->typeEntry != returnType) {
         fprintf(stderr, "Error: return type of function '%s' does not match its declaration\n",
@@ -968,7 +1108,16 @@ tnode* makeArray2DNode(char *name, tnode *rowIndex, tnode *colIndex) {
 	return node;
 }
 
-/* Find a field on the current base type and return a node carrying that field's type. */
+/*
+ * FUNCTION: makeFieldNode
+ * PURPOSE: Build one part of a dotted field expression and check it exists.
+ * INPUT: Base variable/field AST and the next field name after a dot.
+ * RETURN: NODE_FIELD with its field-table entry and exact field type.
+ * FLOW: Look up the name on base->typeEntry, then create the new node. For a
+ * chain like head.next.value, the next call receives the previous field node.
+ * codeGen() later follows Fentry->fieldIndex to reach this field's word.
+ * MODIFICATION HINT: Add field-type validation or new field syntax here.
+ */
 tnode* makeFieldNode(tnode *base, char *fieldName) {
     Fieldlist *field;
     tnode *node;

@@ -53,7 +53,12 @@ enum {
     TYPE_NULL
 };
 
-/* One row per built-in or user-defined type; field links describe named types. */
+/*
+ * TYPE TABLE ENTRY:
+ * One row per built-in or user-defined type. size is the number of words in
+ * the type's object; fields lists its members. Variables and AST nodes keep a
+ * pointer to this entry so checks use the exact type name.
+ */
 typedef struct Typetable {
     char *name;                 // type name
     int size;                   // number of words in a value of this type
@@ -61,7 +66,11 @@ typedef struct Typetable {
     struct Typetable *next;
 } Typetable;
 
-/* One declared field, pointing to its type-table row and position in its owner. */
+/*
+ * FIELD TABLE ENTRY:
+ * Stores a member's name, exact type entry, and word index inside its object.
+ * codegen uses fieldIndex as the offset from the object's heap address.
+ */
 typedef struct Fieldlist {
     char *name;                 // field name
     int fieldIndex;             // position in the containing type
@@ -112,7 +121,12 @@ typedef struct Lsymbol {
     struct Lsymbol *next;
 } Lsymbol;
 
-/* typeEntry preserves exact named-type identity for field and assignment checks. */
+/*
+ * AST NODE TYPE LINKS:
+ * type is the small code used by existing expression/code-generation logic.
+ * typeEntry keeps the exact named type for Stage 6 assignments and fields;
+ * Fentry identifies the selected member and its offset inside the object.
+ */
 typedef struct tnode {
 	int type; // legacy primitive type code used by existing AST/codegen logic
     Typetable *typeEntry; // exact type identity, including user-defined types

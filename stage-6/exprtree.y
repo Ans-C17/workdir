@@ -131,7 +131,13 @@ FieldDecl : FieldType ID SEMICOLON {
           }
           ;
 
-/* Field types may be primitive or a previously defined/self-referential named type. */
+/*
+ * FIELD TYPE RULE:
+ * Fields may be int, str, the type currently being defined, or an earlier
+ * user-defined type. TBeginDefinition() makes self-reference possible; a
+ * later type is rejected because it has not yet been entered in the table.
+ * If the language permits a new field type, update this rule and its checks.
+ */
 FieldType : INT { $$ = TLookup("int"); }
           | STR { $$ = TLookup("str"); }
           | ID {
@@ -381,7 +387,12 @@ Variable : ID {
         $$ = makeDereferenceNode($2);
     };
 
-/* Resolve every segment against the preceding field's type, enabling a.b.c chains. */
+/*
+ * FIELD ACCESS RULE:
+ * The first dot starts from a variable/array/dereference. Each following dot
+ * starts from the field node built just before it. makeFieldNode() checks that
+ * the named member belongs to the current base type and sets the result type.
+ */
 Field : Variable '.' ID {
             $$ = makeFieldNode($1, $3);
         }
@@ -591,14 +602,24 @@ Stmt : InputStmt {
     | DoWhileStmt {
         $$ = $1;
     }
-    /* alloc stores a new block address in a user-defined variable or field. */
+    /*
+     * ALLOCATION SYNTAX:
+     * Both a variable and a field may receive a fresh heap block. The AST
+     * constructor checks the named type and eight-field allocator limit;
+     * codeGen() later emits the run-time allocation instructions.
+     */
     | Variable ASSIGN ALLOC '(' ')' SEMICOLON {
         $$ = makeAllocNode($1);
     }
     | Field ASSIGN ALLOC '(' ')' SEMICOLON {
         $$ = makeAllocNode($1);
     }
-    /* free returns the block currently referenced by a user-defined variable or field. */
+    /*
+     * FREE SYNTAX:
+     * Accept a user-defined variable or field. The constructor checks its
+     * type; codeGen() reads the stored address and returns its block to the
+     * free list. This does not clear the source variable.
+     */
     | FREE '(' ID ')' SEMICOLON {
         $$ = makeFreeNode(makeIdNode($3));
     }
